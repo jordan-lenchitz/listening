@@ -1,6 +1,6 @@
 # listening to *a cappella* singing: an ecological approach
 
-wo complementary approaches to the same sound:
+two complementary computational approaches to the same sound:
 - a **competition model** that asks "which partials win?" (the multi-pitch tracker)
 - an **affordance model** that asks "where does the sound invite spectral listening, and how strongly?" (the affordance field)
 
