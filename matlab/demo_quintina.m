@@ -1,14 +1,14 @@
 %% demo_quintina.m  ·  sardinian cuncordu, four voices that produce a fifth
 %
-% in sardinian cuncordu singing the four voices bassu, contra, bogi, and
-% falzittu are tuned such that their overtones align and a fifth voice,
-% la quintina, is perceived by listeners who have learned to take up its affordance.
+% in sardinian cuncordu singing the four voices bassu, contra, bogi, and falzittu 
+% are tuned such that their overtones align and a fifth voice = la quintina ['the little fifth']
+% is perceived by listeners who have learned to take up its affordance
 %
-% this demo synthesizes a plausible chord with rich harmonic spectra and
-% runs both the competition-model tracker and the ecological affordance
-% field against it. the tracker may find the quintina as a ghost pitch
-% track. the affordance field should show an availability bright spot at
-% the quintina frequency regardless of whether anything "tracks" it.
+% this demo synthesizes a plausible chord with rich harmonic spectra 
+% and runs both the competition-model tracker and the ecological affordance field against it!
+%
+% the tracker may find the quintina as a ghost pitch track
+% BUT the affordance field should show an availability bright spot at the quintina frequency regardless of whether anything "tracks" it
 %
 % chord, root at g2 (98 hz), just intonation ratios:
 %   bassu       1 : 1    = 98.00 hz   (g2)
@@ -25,8 +25,8 @@ root = 98;
 ratios = [1 1; 3 2; 2 1; 5 2];
 voiceNames = ["bassu", "contra", "bogi", "falzittu"];
 
-% staggered entries so the tracker can establish voice identity in order.
-% all voices exit together - the quintina dies with the ensemble.
+% staggered entries so the tracker can establish voice identity in order
+% all voices exit together - the quintina dies with the ensemble
 entryTimes = [0.5, 1.5, 2.5, 3.5];
 exitTime = 9.0;
 
@@ -79,10 +79,8 @@ field.visualize(A, ...
     OutputPath="quintina_affordance.png");
 
 %% quintina region inspection
-% print the mean availability in a narrow band around each sung fundamental
-% and around the expected quintina region. the quintina region should show
-% significant availability and persistence even though no voice is singing
-% in it.
+% print the mean availability in a narrow band around each sung fundamental and around the expected quintina region
+% the quintina region should show significant availability and persistence even though no voice is singing in it!
 fprintf("\nfield energy by region (mean affordance):\n");
 regions = { ...
     "bassu (fundamental)",      [95, 105]; ...
