@@ -1,9 +1,11 @@
 classdef justintonation
     % justintonation  helpers for building chords from integer ratios.
     %
-    % everything is static. no state. use as a namespace.
+    % everything is static!
+    % no state :) :) :)
+    % use as a namespace (please)
     %
-    % common five-limit ratios:
+    % common five-limit ratios fyi!
     %   unison      1:1
     %   minor third 6:5
     %   major third 5:4
@@ -11,7 +13,7 @@ classdef justintonation
     %   fifth       3:2
     %   minor sixth 8:5
     %   major sixth 5:3
-    %   minor seventh 9:5 (or 7:4 for the harmonic seventh)
+    %   minor seventh 9:5 (but try 7:4 for a much cooler harmonic seventh)
     %   octave      2:1
     %
     % barbershop dominant seventh in just intonation:
