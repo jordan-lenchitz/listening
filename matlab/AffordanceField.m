@@ -6,12 +6,12 @@ classdef AffordanceField < handle
     %
     % the field A(t, f) is the product of two parts:
     %
-    %   peripheral availability  ·  what the auditory periphery permits
+    %   peripheral availability = what the auditory periphery permits
     %     - energy above the local masking threshold
     %     - weighting by the dominance region (ritsma 1967: 500 to 2000 hz)
     %     - critical band smoothing (equivalent rectangular bandwidth scale)
     %
-    %   affordance features  ·  what the local sound structure offers
+    %   affordance features = what the local sound structure offers
     %     - presence        is there something here to hear right now
     %     - persistence     has there been something here i could still track
     %     - continuity      does this connect to what came just before
