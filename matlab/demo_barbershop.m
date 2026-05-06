@@ -1,7 +1,8 @@
 %% demo_barbershop.m - Demo of Multi-F0 Tracker with Synthetic Barbershop Quartet
 %
 % Generates a synthetic barbershop quartet (A dominant 7th in just intonation)
-% with staggered voice entries/exits, then runs the Multi-F0 tracker.
+% with staggered voice entries/exits
+% and then runs the Multi-F0 tracker
 %
 % Chord voicing:
 %   Bass:     A2  = 110.0 Hz  (1:1 root)
