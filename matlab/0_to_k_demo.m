@@ -5,7 +5,7 @@
 %   - sub-bin peak detection
 %   - Kalman filtering
 %   - Hungarian assignment
-%   -  ghost detection
+%   - ghost detection
 %
 % REQUIREMENTS:
 %   - MATLAB R2020a or later, tested through R2026A on apple silicon
