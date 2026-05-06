@@ -1,12 +1,14 @@
 %% DYNAMIC 0-K MULTI-F0 TRACKING - MAIN DEMONSTRATION SCRIPT
 % =========================================================================
-% a reference MATLAB implementation of dynamic polyphonic fundamental 
-% frequency (multi-F0) tracking based on harmonic summation, sub-bin peak
-% detection, Kalman filtering, Hungarian assignment, and ghost detection.
-%
+% a reference MATLAB implementation of dynamic polyphonic fundamental frequency (multi-F0) tracking based on
+%   - harmonic summation
+%   - sub-bin peak detection
+%   - Kalman filtering
+%   - Hungarian assignment
+%   -  ghost detection
 %
 % REQUIREMENTS:
-%   - MATLAB R2020a or later recommended
+%   - MATLAB R2020a or later, tested through R2026A on apple silicon
 %   - Signal Processing Toolbox = required
 %   - Audio Toolbox = optional (for enhanced features)
 %   - Optimization Toolbox = optional (for advanced assignment)
