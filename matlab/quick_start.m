@@ -1,6 +1,6 @@
 %% quick_start.m - Quick Start for Multi-F0 Tracker
 %
-% Minimal examples showing how to use the tracker.
+% minimal reference examples showing how to use the tracker :)
 
 %% Example 1: Basic usage
 [audio, sr] = audioread("your_audio.wav");
