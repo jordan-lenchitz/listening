@@ -1,8 +1,8 @@
 classdef AffordanceField < handle
     % AffordanceField  spectral affordance field for a cappella listening.
     %
-    % the competition-model tracker asks "which partials win?" this class asks
-    % "where does the sound invite spectral listening, and how strongly?"
+    % the competition-model tracker asks "which partials win?" 
+    % this class asks "where does the sound invite spectral listening, and how strongly?"
     %
     % the field A(t, f) is the product of two parts:
     %
@@ -19,18 +19,17 @@ classdef AffordanceField < handle
     %     - harmonic coherence  does this region resemble a voice or timbre
     %
     % this first pass implements presence, persistence, continuity, and change.
-    % harmonic coherence is provided as a stub that returns ones, to be filled
-    % in by a later revision.
     %
     % usage:
     %   field = AffordanceField(SampleRate=22050);
     %   A = field.compute(audio);
     %   field.visualize(A);
     %
-    % the field does not predict what any listener will hear. it articulates
-    % the structure of possibilities the sound offers. la quintina is not
-    % detected by A. la quintina is enacted by a listener who takes up an
-    % affordance that A makes visible.
+    % the field does not predict what any listener will hear!
+    % it articulates the structure of possibilities the sound offers
+    % EXAMPLE 
+    % la quintina is not _ detected _ by A
+    % la quintina is _ enacted by a listener who takes up an affordance that A makes visible _ :)
 
     properties
         SampleRate (1,1) double {mustBePositive} = 22050
