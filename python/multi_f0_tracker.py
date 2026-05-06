@@ -1,16 +1,8 @@
 """
-Dynamic 0-K Multi-F0 Tracker for A Cappella Vocal Ensembles
+dynamic 0-K multi-F0 Tracker for _ a cappella _ singing 
 
-This module implements a dynamic multi-F0 tracking system that can follow 
-up to K simultaneous sung pitches in polyphonic vocal recordings. It maintains
-consistent voice identity and identifies "extra" pitches (overtones, combination
-tones) that emerge from harmonic interactions.
-
-Key Features:
-- Multi-voice pitch tracking (0-K voices active at any time)
-- Continuous voice trajectories with consistent identity
-- Automatic voice entry/exit detection  
-- "Ghost pitch" identification (barbershop fifth voice, Sardinian quintina)
+this implements a dynamic multi-F0 tracking system that can follow  up to K simultaneous sung pitches in polyphonic unaccompanied human singing.
+it maintains consistent voice identity and identifies "extra" pitches (overtones, combination tones, etc.).
 """
 
 import numpy as np
