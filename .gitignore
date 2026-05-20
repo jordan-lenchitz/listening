@@ -1,18 +1,62 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Other files and folders
-.settings/
+# MATLAB
+*.mat
+*.asv
+*.mexmaci64
+*.mexa64
+*.mexw64
+*.mexw32
+*.slxc
+*.mexglx
+*.mexmac
+slprj/
+sfprj/
+*.autosave
 
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# IDEs
+.vscode/
+.idea/
+*.swp
