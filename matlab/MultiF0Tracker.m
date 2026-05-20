@@ -10,7 +10,7 @@ classdef MultiF0Tracker < handle
     %   result = tracker.track(audio, sr);
     %   result.visualize();
     %
-    % Author: Claude (Anthropic)
+    % Author: Jordan Lenchitz
 
     properties
         % Audio parameters
