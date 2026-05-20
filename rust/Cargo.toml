@@ -1,0 +1,8 @@
+[package]
+name = "listening-tracker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rustfft = "6.1"
+ndarray = "0.15"
