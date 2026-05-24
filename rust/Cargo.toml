@@ -6,3 +6,13 @@ edition = "2021"
 [dependencies]
 rustfft = "6.1"
 ndarray = "0.15"
+ndarray-stats = "0.5"
+num-complex = "0.4"
+hound = "3.5"
+cpal = "0.15"
+pathfinding = "4.3" # For Hungarian/Munkres algorithm
+realfft = "3.3"
+dashmap = "5.5" # Concurrent hash map for real-time state
+crossbeam-channel = "0.5" # Thread communication for audio stream
+ringbuf = "0.3" # Lock-free ring buffer
+itertools = "0.11"
