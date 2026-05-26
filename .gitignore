@@ -60,3 +60,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Rust
+/rust/target/
+**/*.rs.bk
+Cargo.lock
