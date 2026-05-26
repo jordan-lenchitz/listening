@@ -4,31 +4,36 @@ mod tracking;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use crate::dsp::yin::Yin;
 use crate::tracking::BayesianTracker;
-use std::sync::{Arc, Mutex};
-use ringbuf::{LocalRb, Rb, SharedRb};
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("A Cappella Multi-F0 Tracker (Rust Real-time Edition)");
+    let args: Vec<String> = env::args().collect();
+    let file_path = args.get(1);
 
+    if let Some(path) = file_path {
+        println!("Processing file: {}", path);
+        process_file(path)?;
+    } else {
+        println!("A Cappella Multi-F0 Tracker (Rust Real-time Edition)");
+        run_realtime()?;
+    }
+    Ok(())
+}
+
+fn run_realtime() -> Result<(), Box<dyn std::error::Error>> {
     // Audio setup
     let host = cpal::default_host();
-    let device = host.default_input_device().expect("no input device available");
+    let device = host.default_input_device()
+        .ok_or("No input device available")?;
+    
     let config: cpal::StreamConfig = device.default_input_config()?.into();
     let sr = config.sample_rate.0 as f64;
     
     println!("Input device: {}", device.name()?);
     println!("Sample rate: {} Hz", sr);
 
-    // DSP components
-    let frame_size = 2048;
-    let yin = Yin::new(frame_size, sr, 65.0, 1000.0);
-    let mut tracker = BayesianTracker::new(65.0, 1000.0, 60, 0.98);
-
-    // Channel for passing audio blocks to the processing thread
     let (tx, rx): (Sender<Vec<f32>>, Receiver<Vec<f32>>) = unbounded();
-
-    // Audio input stream
     let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
         let _ = tx.send(data.to_vec());
     };
@@ -38,10 +43,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }, None)?;
 
     input_stream.play()?;
-
     println!("Listening... Press Ctrl+C to stop.");
+    
+    process_loop(rx, sr)
+}
 
-    // Simple processing loop
+fn process_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut reader = hound::WavReader::open(path)?;
+    let spec = reader.spec();
+    let sr = spec.sample_rate as f64;
+    
+    let (tx, rx): (Sender<Vec<f32>>, Receiver<Vec<f32>>) = unbounded();
+    
+    let samples: Vec<f32> = match spec.sample_format {
+        hound::SampleFormat::Float => reader.samples::<f32>().map(|s| s.unwrap()).collect(),
+        hound::SampleFormat::Int => {
+            let max_val = (1 << (spec.bits_per_sample - 1)) as f32;
+            reader.samples::<i32>().map(|s| s.unwrap() as f32 / max_val).collect()
+        },
+    };
+
+    tx.send(samples)?;
+    drop(tx);
+
+    process_loop(rx, sr)
+}
+
+fn process_loop(rx: Receiver<Vec<f32>>, sr: f64) -> Result<(), Box<dyn std::error::Error>> {
+    // DSP components
+    let frame_size = 2048;
+    let yin = Yin::new(frame_size, sr, 65.0, 1000.0);
+    let mut tracker = BayesianTracker::new(65.0, 1000.0, 60, 0.98);
+    let mut affordance = crate::tracking::affordance::AffordanceField::new(sr, frame_size);
+
+    let mut planner = realfft::RealFftPlanner::<f64>::new();
+    let r2c = planner.plan_fft_forward(frame_size);
+    let mut fft_in = vec![0.0; frame_size];
+    let mut fft_out = r2c.make_output_vec();
+
     let mut buffer = Vec::new();
     while let Ok(data) = rx.recv() {
         buffer.extend(data);
@@ -49,20 +88,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         while buffer.len() >= frame_size {
             let frame: Vec<f32> = buffer.drain(0..frame_size).collect();
             
-            // 1. YIN estimate
+            for (i, &v) in frame.iter().enumerate() { fft_in[i] = v as f64; }
+            let _ = r2c.process(&mut fft_in, &mut fft_out);
+            let mag = ndarray::Array1::from_shape_fn(fft_out.len(), |i| fft_out[i].norm());
+            
+            let field = affordance.update(&mag);
+            let meas_lh = tracker.map_affordance_field(&affordance.freqs, &field);
+            
             if let Some((f0, conf)) = yin.estimate(&frame) {
-                // 2. Dummy measurement likelihood (normalized FFT magnitude or Gabor)
-                // For now, we'll just use a uniform one to see it running
-                let n_g = 60 * (1000.0/65.0 as f64).log2().ceil() as usize;
-                let meas_lh = ndarray::Array1::from_elem(n_g, 1.0 / n_g as f64);
+                let _post = tracker.update(&meas_lh, Some(f0), conf);
                 
-                // 3. Bayesian update
-                let post = tracker.update(&meas_lh, Some(f0), conf);
-                
-                // 4. Output top pitch
                 if conf > 0.5 {
                     println!("Detected F0: {:.1} Hz (conf: {:.2})", f0, conf);
                 }
+            } else {
+                let _post = tracker.update(&meas_lh, None, 0.0);
             }
         }
     }
