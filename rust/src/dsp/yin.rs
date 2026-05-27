@@ -143,3 +143,32 @@ impl Yin {
         (refined_tau, refined_val)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_yin_sine_wave() {
+        let sr = 44100.0;
+        let frame_size = 2048;
+        let yin = Yin::new(frame_size, sr, 65.0, 1000.0);
+        
+        let freq = 440.0;
+        let mut frame = vec![0.0f32; frame_size];
+        for i in 0..frame_size {
+            frame[i] = (2.0 * std::f64::consts::PI * freq * i as f64 / sr).sin() as f32;
+        }
+
+        let result = yin.estimate(&frame);
+        if let Some((f0, conf)) = result {
+            println!("Detected F0: {} Hz (conf: {})", f0, conf);
+        } else {
+            println!("No pitch detected");
+        }
+        assert!(result.is_some());
+        let (f0, conf) = result.unwrap();
+        assert!((f0 - 440.0).abs() < 5.0, "Expected f0 around 440Hz, got {}", f0);
+        assert!(conf > 0.5, "Expected high confidence, got {}", conf);
+    }
+}
