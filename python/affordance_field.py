@@ -111,7 +111,10 @@ class AffordanceField:
         return avail * weight[:, np.newaxis]
 
     def _feature_presence(self, mag: np.ndarray) -> np.ndarray:
-        return mag / np.max(mag)
+        mx = np.max(mag)
+        if mx < 1e-12:
+            return np.zeros_like(mag)
+        return mag / mx
 
     def _feature_persistence(self, presence: np.ndarray) -> np.ndarray:
         dt = self.hop_length / self.sample_rate
@@ -123,7 +126,10 @@ class AffordanceField:
             prev = alpha * prev + (1 - alpha) * presence[:, k]
             persistence[:, k] = prev
             
-        return persistence / np.max(persistence)
+        mx = np.max(persistence)
+        if mx < 1e-12:
+            return np.zeros_like(persistence)
+        return persistence / mx
 
     def _feature_continuity(self, presence: np.ndarray, freqs: np.ndarray) -> np.ndarray:
         # Time-lag correlation
