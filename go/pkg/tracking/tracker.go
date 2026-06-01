@@ -120,7 +120,7 @@ func (m *MultiF0Tracker) CentsDistance(f1, f2 float64) float64 {
 	return math.Abs(1200 * math.Log2(f1/f2))
 }
 
-func (m *MultiF0Tracker) Update(peaks []Peak) {
+func (m *MultiF0Tracker) Update(peaks []Peak, transitionMatrix [][]float64, grid []float64) {
 	m.CurrentFrame++
 
 	activeTracks := m.getActiveTracks()
@@ -143,11 +143,21 @@ func (m *MultiF0Tracker) Update(peaks []Peak) {
 	for i, track := range activeTracks {
 		costs[i] = make([]float64, len(peaks))
 		for j, peak := range peaks {
-			dist := m.CentsDistance(track.LastPitch(), peak.Freq)
-			if dist > m.Config.MaxPitchJumpCents {
-				costs[i][j] = m.Config.AssignmentCostScale
+			if transitionMatrix != nil && grid != nil {
+				// Bayesian cost: -log(P(peak|track))
+				tIdx := m.findNearest(grid, track.LastPitch())
+				pIdx := m.findNearest(grid, peak.Freq)
+				prob := transitionMatrix[pIdx][tIdx]
+				// Add small epsilon to avoid log(0)
+				costs[i][j] = -math.Log(prob + 1e-6)
 			} else {
-				costs[i][j] = dist / m.Config.MaxPitchJumpCents
+				// Fallback to cents distance
+				dist := m.CentsDistance(track.LastPitch(), peak.Freq)
+				if dist > m.Config.MaxPitchJumpCents {
+					costs[i][j] = m.Config.AssignmentCostScale
+				} else {
+					costs[i][j] = dist / m.Config.MaxPitchJumpCents
+				}
 			}
 		}
 	}

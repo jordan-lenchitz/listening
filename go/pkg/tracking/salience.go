@@ -4,7 +4,7 @@ import (
 	"math"
 )
 
-func (m *MultiF0Tracker) ComputeSalience(spectrum []float64, freqs []float64) ([]float64, []float64) {
+func (m *MultiF0Tracker) ComputeSalience(spectrum []float64, freqs []float64, affordance []float64) ([]float64, []float64) {
 	nBins := 500
 	f0Candidates := make([]float64, nBins)
 	minLog := math.Log10(m.Config.MinFreq)
@@ -46,6 +46,13 @@ func (m *MultiF0Tracker) ComputeSalience(spectrum []float64, freqs []float64) ([
 			}
 			total += harmonicWeights[h-1] * maxVal
 		}
+
+		// Apply Affordance Weighting if provided
+		if affordance != nil {
+			affIdx := m.findNearest(freqs, f0)
+			total *= affordance[affIdx]
+		}
+
 		salience[i] = total
 	}
 
