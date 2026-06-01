@@ -59,18 +59,22 @@ func main() {
 		}
 
 		field := af.Update(mag)
-		maxAffordance := 0.0
-		for _, v := range field {
-			if v > maxAffordance {
-				maxAffordance = v
-			}
-		}
+		_ = field // Field is computed and state updated
 
 		f0Candidates, salience := tracker.ComputeSalience(mag, freqs)
 		peaks := tracker.DetectPeaks(f0Candidates, salience)
 		tracker.Update(peaks)
-		
-		_ = maxAffordance // Could be used for filtering or weighting
+	}
+
+	times := make([]float64, len(coeffs))
+	for i := range times {
+		times[i] = float64(i * tracker.Config.HopLength) / float64(sr)
+	}
+
+	result := &tracking.TrackingResult{
+		Times:      times,
+		SampleRate: int(sr),
+		HopLength:  tracker.Config.HopLength,
 	}
 
 	fmt.Println("Tracking Results:")
@@ -79,8 +83,16 @@ func main() {
 			if len(track.Pitches) > 10 {
 				fmt.Printf("Track %d: StartFrame=%d, Duration=%d, AvgPitch=%.2f Hz\n",
 					track.ID, track.StartFrame, len(track.Pitches), average(track.Pitches))
+				result.SungVoices = append(result.SungVoices, track)
 			}
 		}
+	}
+
+	visPath := "results.png"
+	if err := result.Visualize(visPath, "Go Multi-F0 Tracking"); err != nil {
+		fmt.Printf("Error saving visualization: %v\n", err)
+	} else {
+		fmt.Printf("Visualization saved to %s\n", visPath)
 	}
 }
 
