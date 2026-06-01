@@ -120,6 +120,7 @@ func (m *MultiF0Tracker) CentsDistance(f1, f2 float64) float64 {
 	return math.Abs(1200 * math.Log2(f1/f2))
 }
 
+
 func (m *MultiF0Tracker) Update(peaks []Peak, transitionMatrix [][]float64, grid []float64) {
 	m.CurrentFrame++
 
