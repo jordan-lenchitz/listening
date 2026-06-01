@@ -1,41 +1,47 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"log"
+	"errors"
+	"log/slog"
 	"math"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/jordan-lenchitz/listening/go/pkg/tracking"
 )
 
-type TrackingRequest struct {
-	Coefficients [][]Complex `json:"coefficients"`
-	SampleRate   int         `json:"sample_rate"`
-	HopLength    int         `json:"hop_length"`
-	FrameLength  int         `json:"frame_length"`
+type trackRequest struct {
+	Coefficients [][]complexData `json:"coefficients"`
+	SampleRate   int             `json:"sample_rate"`
+	HopLength    int             `json:"hop_length"`
+	FrameLength  int             `json:"frame_length"`
 }
 
-type Complex struct {
+type complexData struct {
 	Real float64 `json:"real"`
 	Imag float64 `json:"imag"`
 }
 
-func main() {
-	http.HandleFunc("/track", handleTrack)
-	log.Println("Tracking service starting on :8082")
-	log.Fatal(http.ListenAndServe(":8082", nil))
+type server struct {
+	logger *slog.Logger
 }
 
-func handleTrack(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+func (s *server) routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /track", s.handleTrack)
+	return mux
+}
 
-	var req TrackingRequest
+func (s *server) handleTrack(w http.ResponseWriter, r *http.Request) {
+	var req trackRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		s.logger.Error("decode failed", "error", err)
+		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 
@@ -60,12 +66,42 @@ func handleTrack(w http.ResponseWriter, r *http.Request) {
 		}
 
 		field := af.Update(mag)
-		f0Candidates, salience := tracker.ComputeSalience(mag, freqs, field)
+		cands, salience := tracker.ComputeSalience(mag, freqs, field)
 		salience = dt.HarmonicCombWeight(salience)
-		peaks := tracker.DetectPeaks(f0Candidates, salience)
+		peaks := tracker.DetectPeaks(cands, salience)
 		tracker.Update(peaks, dt.TransitionMatrix, dt.FreqGrid)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tracker.Tracks)
+	if err := json.NewEncoder(w).Encode(tracker.Tracks); err != nil {
+		s.logger.Error("encode failed", "error", err)
+	}
+}
+
+func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	srv := &server{logger: logger}
+
+	httpSrv := &http.Server{
+		Addr:         ":8082",
+		Handler:      srv.routes(),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+
+	go func() {
+		logger.Info("starting tracking service", "addr", httpSrv.Addr)
+		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("listen failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	httpSrv.Shutdown(ctx)
 }
