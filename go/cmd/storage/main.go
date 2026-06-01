@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -18,12 +19,12 @@ func main() {
 
 func handleStore(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "Missing file", http.StatusBadRequest)
+		http.Error(w, "missing file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -31,11 +32,11 @@ func handleStore(w http.ResponseWriter, r *http.Request) {
 	filename := fmt.Sprintf("result_%d.png", time.Now().Unix())
 	out, err := os.Create(filepath.Join(os.TempDir(), filename))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, strings.ToLower(err.Error()), http.StatusInternalServerError)
 		return
 	}
 	defer out.Close()
 
 	io.Copy(out, file)
-	fmt.Fprintf(w, "Stored as %s\n", filename)
+	fmt.Fprintf(w, "stored as %s\n", filename)
 }
