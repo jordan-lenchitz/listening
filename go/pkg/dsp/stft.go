@@ -26,6 +26,7 @@ func NewSTFT(frameLength, hopLength int) *STFT {
 	}
 }
 
+
 func (s *STFT) Compute(audio []float64) [][]complex128 {
 	numFrames := (len(audio)-s.FrameLength)/s.HopLength + 1
 	if numFrames <= 0 {
