@@ -27,7 +27,7 @@ func handleStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	
+
 	filename := fmt.Sprintf("result_%d.png", time.Now().Unix())
 	out, err := os.Create(filepath.Join(os.TempDir(), filename))
 	if err != nil {
@@ -35,7 +35,7 @@ func handleStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer out.Close()
-	
+
 	io.Copy(out, file)
 	fmt.Fprintf(w, "Stored as %s\n", filename)
 }

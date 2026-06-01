@@ -44,7 +44,7 @@ func handleFSST(w http.ResponseWriter, r *http.Request) {
 	coeffs := s.Compute(req.Audio)
 	fsst := dsp.NewFSST(req.SampleRate, req.FrameLength, req.HopLength)
 	fsstCoeffs := fsst.Compute(coeffs)
-	
+
 	respCoeffs := make([][]Complex, len(fsstCoeffs))
 	for i, frame := range fsstCoeffs {
 		respCoeffs[i] = make([]Complex, len(frame))

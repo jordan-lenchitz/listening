@@ -37,13 +37,13 @@ the project includes an expansive suite of high-performance microservices
 2. **dsp** (:8081) computes stft coefficients
 3. **tracking** (:8082) performs pitch tracking logic
 4. **visualizer** (:8083) generates results plots
-5. **auth** (:8084) handles simple token validation
-6. **logger** (:8085) centralized logging
-7. **storage** (:8086) stores tracked image files
-8. **music-theory** (:8087) calculates just intonation ratios
-9. **fsst** (:8088) computes synchrosqueezing transforms
-10. **health** (:8089) centralized health checks
-11. **config** (:8090) central configuration distribution
+5. **auth** (:8084) - modern JWT-based authentication (signing/verification)
+6. **logger** (:8085) - centralized logging hub
+7. **storage** (:8086) - artifact persistence service
+8. **music-theory** (:8087) - computational musicology service
+9. **fsst** (:8088) - advanced time-frequency reassignment
+10. **health** (:8089) - cluster health monitoring
+11. **config** (:8090) - dynamic configuration provider
 
 ### howto (microservices)
 
