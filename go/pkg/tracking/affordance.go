@@ -191,8 +191,8 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 		}
 	}
 
-	// 6. Harmonic Coherence (Stub)
-	coherence := 1.0
+	// 6. Harmonic Coherence
+	coherence := af.harmonicCoherence(mag)
 
 	// Integration (Weighted combination instead of strict geometric mean if features are missing)
 	field := make([]float64, n)
@@ -206,7 +206,7 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 
 		// Geometric mean but with small epsilon or fallback
 		eps := 0.01
-		features := (presence[i] + eps) * (normPersistence[i] + eps) * (continuity[i] + eps) * (change[i] + eps) * coherence
+		features := (presence[i] + eps) * (normPersistence[i] + eps) * (continuity[i] + eps) * (change[i] + eps) * (coherence[i] + eps)
 		field[i] = availability[i] * math.Pow(features, 0.2)
 	}
 
@@ -214,6 +214,45 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 	copy(af.prevPresence, presence)
 
 	return field
+}
+
+func (af *AffordanceField) harmonicCoherence(mag []float64) []float64 {
+	n := len(mag)
+	coherence := make([]float64, n)
+	nHarmonics := 4
+	weights := []float64{1.0, 0.5, 0.33, 0.25}
+
+	binHz := af.Frequencies[1] - af.Frequencies[0]
+
+	for i := 1; i < n; i++ {
+		f0 := af.Frequencies[i]
+		var score float64
+		for h := 1; h <= nHarmonics; h++ {
+			fh := f0 * float64(h)
+			if fh > af.Frequencies[n-1] {
+				break
+			}
+			idx := int(math.Round(fh / binHz))
+			if idx < n {
+				score += weights[h-1] * mag[idx]
+			}
+		}
+		coherence[i] = score
+	}
+
+	// Normalize
+	maxCoh := 0.0
+	for _, v := range coherence {
+		if v > maxCoh {
+			maxCoh = v
+		}
+	}
+	if maxCoh > 0 {
+		for i := range coherence {
+			coherence[i] /= maxCoh
+		}
+	}
+	return coherence
 }
 
 func (af *AffordanceField) smoothAlongERB(x []float64, sigmaERB float64) []float64 {
