@@ -1,6 +1,6 @@
 # go (readme.md edition)
 
-a high-performance ecologically inspired multi-pitch tracker mirroring the research work done in MATLAB/Python focusing on spectral affordance fields and dual-process Bayesian tracking :)
+a high-performance ecologically inspired multi-pitch tracker mirroring the research work done once upon a time in MATLAB/Python focusing on spectral affordance fields and dual-process Bayesian tracking :)
 
 ## features
 
@@ -24,12 +24,12 @@ a high-performance ecologically inspired multi-pitch tracker mirroring the resea
 
 ## microservices
 
-the project has been refactored into a suite of high-performance microservices:
+the project includes a suite of high-performance microservices
 
-1. **orchestrator** (:8080) - entry point, decodes audio and manages the pipeline
-2. **dsp** (:8081) - computes stft coefficients
-3. **tracking** (:8082) - performs pitch tracking logic
-4. **visualizer** (:8083) - generates results plots
+1. **orchestrator** (:8080) entry point which decodes audio and manages the pipeline
+2. **dsp** (:8081) computes stft coefficients
+3. **tracking** (:8082) performs pitch tracking logic
+4. **visualizer** (:8083) generates results plots
 
 ### howto (microservices)
 
@@ -41,7 +41,7 @@ go run cmd/visualizer/main.go
 go run cmd/orchestrator/main.go
 ```
 
-then send a wav file to the orchestrator:
+then send your `.wav` to the orchestrator!
 ```bash
 curl -X POST -F "audio=@test.wav" http://localhost:8080/process > results.png
 ```
@@ -74,7 +74,7 @@ go run cmd/rt-tracker/main.go
 
 this implementation is optimized for speed and can process audio much faster than the Python equivalent in this repo
 
-use the included benchmarks to verify on your machine
+use the included benchmarks to test for yourself (baremetal recommended)
 ```bash
 go test -bench . ./pkg/tracking/...
 ```
