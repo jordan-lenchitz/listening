@@ -18,18 +18,32 @@ a high-performance ecologically inspired multi-pitch tracker mirroring the resea
 - `cmd/tracking/` Tracking microservice
 - `cmd/visualizer/` Visualizer microservice
 - `cmd/orchestrator/` Orchestrator microservice (Main entry point)
+- `cmd/auth/` Auth validation microservice
+- `cmd/logger/` Centralized logging microservice
+- `cmd/storage/` Storage microservice
+- `cmd/music-theory/` Music theory math microservice
+- `cmd/fsst/` FSST specialized DSP microservice
+- `cmd/health/` Health check microservice
+- `cmd/config/` Config distribution microservice
 - `pkg/tracking/` core tracking logic affordance fields and Bayesian models
 - `pkg/dsp/`  dsp utilities (think STFT and FSST)
 - `pkg/music/` music theory utilities (think just intonation and frequency/MIDI conversions)
 
 ## microservices
 
-the project includes a suite of high-performance microservices
+the project includes an expansive suite of high-performance microservices
 
 1. **orchestrator** (:8080) entry point which decodes audio and manages the pipeline
 2. **dsp** (:8081) computes stft coefficients
 3. **tracking** (:8082) performs pitch tracking logic
 4. **visualizer** (:8083) generates results plots
+5. **auth** (:8084) handles simple token validation
+6. **logger** (:8085) centralized logging
+7. **storage** (:8086) stores tracked image files
+8. **music-theory** (:8087) calculates just intonation ratios
+9. **fsst** (:8088) computes synchrosqueezing transforms
+10. **health** (:8089) centralized health checks
+11. **config** (:8090) central configuration distribution
 
 ### howto (microservices)
 
@@ -38,6 +52,13 @@ start each service in a separate terminal:
 go run cmd/dsp/main.go
 go run cmd/tracking/main.go
 go run cmd/visualizer/main.go
+go run cmd/auth/main.go
+go run cmd/logger/main.go
+go run cmd/storage/main.go
+go run cmd/music-theory/main.go
+go run cmd/fsst/main.go
+go run cmd/health/main.go
+go run cmd/config/main.go
 go run cmd/orchestrator/main.go
 ```
 
