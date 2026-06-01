@@ -55,3 +55,4 @@ def test_track_silent_signal():
     result = tracker.track(audio, sr)
     assert len(result["sung_voices"]) == 0
     assert len(result["extra_pitches"]) == 0
+
