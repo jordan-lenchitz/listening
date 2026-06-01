@@ -37,7 +37,6 @@ func main() {
 	deviceConfig.SampleRate = SampleRate
 	deviceConfig.Alsa.NoMMap = 1
 
-	// Setup tracking components
 	tracker := tracking.NewMultiF0Tracker(nil)
 	tracker.Config.SampleRate = SampleRate
 	tracker.Config.FrameLength = FrameLength
@@ -48,7 +47,6 @@ func main() {
 	stft := dsp.NewSTFT(FrameLength, HopLength)
 	freqs := stft.FFTFrequencies(SampleRate)
 
-	// Ring buffer for bridging malgo callbacks and STFT frames
 	samplesChan := make(chan []float32, 100)
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
@@ -78,7 +76,6 @@ func main() {
 
 	fmt.Println("Real-time tracking started... Press Ctrl+C to stop.")
 
-	// Processing loop
 	go func() {
 		var buffer []float64
 		for {
@@ -89,10 +86,9 @@ func main() {
 
 			for len(buffer) >= FrameLength {
 				frame := buffer[:FrameLength]
-				// Shift buffer by HopLength
+
 				buffer = buffer[HopLength:]
 
-				// Run tracking pipeline
 				coeffs := stft.Compute(frame)
 				if len(coeffs) == 0 {
 					continue
@@ -109,7 +105,6 @@ func main() {
 				peaks := tracker.DetectPeaks(f0Candidates, salience)
 				tracker.Update(peaks, dt.TransitionMatrix, dt.FreqGrid)
 
-				// Print active tracks to console
 				fmt.Printf("\rFrame %d | Active Voices: %d   ", tracker.CurrentFrame, countActive(tracker.Tracks))
 			}
 		}
@@ -118,7 +113,6 @@ func main() {
 	<-stopChan
 	fmt.Println("\nStopping...")
 
-	// Final Summary
 	fmt.Println("Final Tracking Results:")
 	for _, track := range tracker.Tracks {
 		if track.State == tracking.ACTIVE || track.State == tracking.TERMINATED {
@@ -150,4 +144,3 @@ func average(vals []float64) float64 {
 	}
 	return sum / float64(len(vals))
 }
-

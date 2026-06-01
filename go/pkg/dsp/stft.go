@@ -1,8 +1,8 @@
 package dsp
 
 import (
-	"math"
 	"gonum.org/v1/gonum/dsp/fourier"
+	"math"
 )
 
 type STFT struct {
@@ -15,7 +15,7 @@ type STFT struct {
 func NewSTFT(frameLength, hopLength int) *STFT {
 	window := make([]float64, frameLength)
 	for i := 0; i < frameLength; i++ {
-		// Hann window
+
 		window[i] = 0.5 * (1 - math.Cos(2*math.Pi*float64(i)/float64(frameLength-1)))
 	}
 	return &STFT{
@@ -25,7 +25,6 @@ func NewSTFT(frameLength, hopLength int) *STFT {
 		fft:         fourier.NewFFT(frameLength),
 	}
 }
-
 
 func (s *STFT) Compute(audio []float64) [][]complex128 {
 	numFrames := (len(audio)-s.FrameLength)/s.HopLength + 1

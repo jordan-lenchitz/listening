@@ -49,7 +49,7 @@ func main() {
 	freqs := stft.FFTFrequencies(int(sr))
 
 	af := tracking.NewAffordanceField(float64(sr), tracker.Config.FrameLength)
-	dt := tracking.NewDualProcessTracker(tracker.Config.MinFreq, tracker.Config.MaxFreq, 60) // 60 bins per octave
+	dt := tracking.NewDualProcessTracker(tracker.Config.MinFreq, tracker.Config.MaxFreq, 60)
 
 	fmt.Printf("Processing %d frames...\n", len(coeffs))
 
@@ -63,7 +63,6 @@ func main() {
 
 		f0Candidates, salience := tracker.ComputeSalience(mag, freqs, field)
 
-		// Refine salience with harmonic comb weighting from DualProcessTracker
 		salience = dt.HarmonicCombWeight(salience)
 
 		peaks := tracker.DetectPeaks(f0Candidates, salience)
@@ -72,7 +71,7 @@ func main() {
 
 	times := make([]float64, len(coeffs))
 	for i := range times {
-		times[i] = float64(i * tracker.Config.HopLength) / float64(sr)
+		times[i] = float64(i*tracker.Config.HopLength) / float64(sr)
 	}
 
 	result := &tracking.TrackingResult{
@@ -110,4 +109,3 @@ func average(vals []float64) float64 {
 	}
 	return sum / float64(len(vals))
 }
-

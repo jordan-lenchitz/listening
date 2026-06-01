@@ -6,10 +6,8 @@ import (
 	"sort"
 )
 
-// JustIntonation provides helpers for building chords from integer ratios and musical calculations.
 type JustIntonation struct{}
 
-// Chord builds chord frequencies from a root and a slice of [num, den] pairs.
 func (ji JustIntonation) Chord(rootHz float64, ratios [][2]int) []float64 {
 	freqs := make([]float64, len(ratios))
 	for i, ratio := range ratios {
@@ -18,12 +16,10 @@ func (ji JustIntonation) Chord(rootHz float64, ratios [][2]int) []float64 {
 	return freqs
 }
 
-// Cents calculates the absolute cents distance between two frequencies.
 func (ji JustIntonation) Cents(f1, f2 float64) float64 {
 	return math.Abs(1200 * math.Log2(f1/f2))
 }
 
-// CentsFromEqualTempered calculates the signed cents deviation from the nearest equal-tempered pitch.
 func (ji JustIntonation) CentsFromEqualTempered(freqs []float64, a4 float64) []float64 {
 	if a4 == 0 {
 		a4 = 440.0
@@ -37,7 +33,6 @@ func (ji JustIntonation) CentsFromEqualTempered(freqs []float64, a4 float64) []f
 	return cents
 }
 
-// NearestNoteName returns the nearest twelve-tone note name with octave number.
 func (ji JustIntonation) NearestNoteName(freq float64, a4 float64) string {
 	if a4 == 0 {
 		a4 = 440.0
@@ -47,15 +42,13 @@ func (ji JustIntonation) NearestNoteName(freq float64, a4 float64) string {
 	midi := 69 + int(semisFromA4)
 	octave := (midi / 12) - 1
 	pc := midi % 12
-	// Handle negative modulo in Go if necessary, but midi is usually positive for audible frequencies
+
 	if pc < 0 {
 		pc += 12
 	}
 	return fmt.Sprintf("%s%d", names[pc], octave)
 }
 
-// CombinationTones generates expected combination tone frequencies for a set of frequencies.
-// orders can be "difference", "cubic", or "all".
 func (ji JustIntonation) CombinationTones(freqs []float64, orders string) []float64 {
 	sortedFreqs := make([]float64, len(freqs))
 	copy(sortedFreqs, freqs)
