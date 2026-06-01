@@ -48,6 +48,8 @@ func main() {
 	coeffs := stft.Compute(samples)
 	freqs := stft.FFTFrequencies(int(sr))
 
+	af := tracking.NewAffordanceField(float64(sr), tracker.Config.FrameLength)
+
 	fmt.Printf("Processing %d frames...\n", len(coeffs))
 
 	for _, frameCoeffs := range coeffs {
@@ -56,9 +58,19 @@ func main() {
 			mag[i] = math.Sqrt(real(c)*real(c) + imag(c)*imag(c))
 		}
 
+		field := af.Update(mag)
+		maxAffordance := 0.0
+		for _, v := range field {
+			if v > maxAffordance {
+				maxAffordance = v
+			}
+		}
+
 		f0Candidates, salience := tracker.ComputeSalience(mag, freqs)
 		peaks := tracker.DetectPeaks(f0Candidates, salience)
 		tracker.Update(peaks)
+		
+		_ = maxAffordance // Could be used for filtering or weighting
 	}
 
 	fmt.Println("Tracking Results:")
