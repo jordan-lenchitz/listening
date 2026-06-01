@@ -56,6 +56,7 @@ func (m *MultiF0Tracker) ComputeSalience(spectrum []float64, freqs []float64, af
 		salience[i] = total
 	}
 
+
 	// Normalize
 	maxSal := 0.0
 	for _, v := range salience {
