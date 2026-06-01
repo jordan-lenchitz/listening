@@ -14,9 +14,37 @@ a high-performance ecologically inspired multi-pitch tracker mirroring the resea
 
 - `cmd/tracker/` CLI for processing WAV files
 - `cmd/rt-tracker/` CLI for real-time microphone tracking
+- `cmd/dsp/` DSP microservice (STFT)
+- `cmd/tracking/` Tracking microservice
+- `cmd/visualizer/` Visualizer microservice
+- `cmd/orchestrator/` Orchestrator microservice (Main entry point)
 - `pkg/tracking/` core tracking logic affordance fields and Bayesian models
 - `pkg/dsp/`  dsp utilities (think STFT and FSST)
 - `pkg/music/` music theory utilities (think just intonation and frequency/MIDI conversions)
+
+## microservices
+
+the project has been refactored into a suite of high-performance microservices:
+
+1. **orchestrator** (:8080) - entry point, decodes audio and manages the pipeline
+2. **dsp** (:8081) - computes stft coefficients
+3. **tracking** (:8082) - performs pitch tracking logic
+4. **visualizer** (:8083) - generates results plots
+
+### howto (microservices)
+
+start each service in a separate terminal:
+```bash
+go run cmd/dsp/main.go
+go run cmd/tracking/main.go
+go run cmd/visualizer/main.go
+go run cmd/orchestrator/main.go
+```
+
+then send a wav file to the orchestrator:
+```bash
+curl -X POST -F "audio=@test.wav" http://localhost:8080/process > results.png
+```
 
 ## install
 
