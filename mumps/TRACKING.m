@@ -70,3 +70,4 @@ AFFORD(TIME,FREQ,SAL) ;
         SET ^F0TRACK("AFFORDANCE",TIME,FREQ)=SAL
         IF SAL>0.8 WRITE "!!! High Affordance at ",TIME,"s / ",FREQ," Hz !!!",!
         QUIT
+
