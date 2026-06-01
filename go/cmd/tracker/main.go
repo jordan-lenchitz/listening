@@ -110,3 +110,4 @@ func average(vals []float64) float64 {
 	}
 	return sum / float64(len(vals))
 }
+
