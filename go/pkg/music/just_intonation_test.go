@@ -49,15 +49,14 @@ func TestJustIntonation_NearestNoteName(t *testing.T) {
 func TestJustIntonation_CombinationTones(t *testing.T) {
 	ji := JustIntonation{}
 	freqs := []float64{200.0, 300.0}
-	// Difference: 100
-	// Cubic: 2*200 - 300 = 100, 2*300 - 200 = 400
+
 	got := ji.CombinationTones(freqs, "all")
 	expected := map[float64]bool{100.0: true, 400.0: true}
-	
-	if len(got) != 3 { // 100 (diff), 100 (cubic), 400 (cubic)
+
+	if len(got) != 3 {
 		t.Errorf("CombinationTones() length = %v, want 3", len(got))
 	}
-	
+
 	for _, v := range got {
 		if !expected[v] {
 			t.Errorf("CombinationTones() unexpected tone %v", v)

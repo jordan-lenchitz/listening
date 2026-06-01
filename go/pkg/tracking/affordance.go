@@ -4,16 +4,13 @@ import (
 	"math"
 )
 
-// AffordanceField calculates the spectral affordance field for a cappella listening.
 type AffordanceField struct {
 	Frequencies []float64
 
-	// State for persistence and change
 	prevPresence   []float64
 	persistence    []float64
 	smoothPresence []float64
 
-	// Hyperparameters
 	PersistenceAlpha   float64
 	ChangeAlpha        float64
 	MaskingFloorDB     float64
@@ -24,7 +21,6 @@ type AffordanceField struct {
 	ContinuityERBSigma float64
 }
 
-// NewAffordanceField creates a new AffordanceField with default parameters.
 func NewAffordanceField(sampleRate float64, frameSize int) *AffordanceField {
 	nBins := frameSize/2 + 1
 	freqs := make([]float64, nBins)
@@ -48,15 +44,13 @@ func NewAffordanceField(sampleRate float64, frameSize int) *AffordanceField {
 	}
 }
 
-// Update the affordance field with a new magnitude spectrum frame.
 func (af *AffordanceField) Update(mag []float64) []float64 {
 	n := len(mag)
 	if n != len(af.Frequencies) {
-		// Handle mismatch if necessary, though they should be consistent
+
 		return nil
 	}
 
-	// 1. Feature Presence (normalized magnitude)
 	maxMag := 0.0
 	for _, v := range mag {
 		if v > maxMag {
@@ -70,7 +64,6 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 		}
 	}
 
-	// 2. Peripheral Availability (Masking + Dominance)
 	availability := make([]float64, n)
 	peakDB := math.Inf(-1)
 	magDB := make([]float64, n)
@@ -93,10 +86,8 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 		availability[i] = val
 	}
 
-	// Apply ERB smoothing to availability
 	availability = af.smoothAlongERB(availability, af.MaskingSpreadERB)
 
-	// Dominance weight
 	maxAvail := 0.0
 	for i := range availability {
 		if af.Frequencies[i] >= af.DominanceLowHz && af.Frequencies[i] <= af.DominanceHighHz {
@@ -107,14 +98,12 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 		}
 	}
 
-	// Normalize availability
 	if maxAvail > 0 {
 		for i := range availability {
 			availability[i] /= maxAvail
 		}
 	}
 
-	// 3. Persistence (Exponential Moving Average)
 	maxPers := 0.0
 	normPersistence := make([]float64, n)
 	for i := range af.persistence {
@@ -129,7 +118,6 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 		}
 	}
 
-	// 4. Change (Onset detection via presence - smoothed presence)
 	change := make([]float64, n)
 	maxChange := 0.0
 	for i := range af.smoothPresence {
@@ -149,7 +137,6 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 		}
 	}
 
-	// 5. Continuity (Temporal correlation + frequency smoothness)
 	timeCoherent := make([]float64, n)
 	hasPrev := false
 	for _, v := range af.prevPresence {
@@ -161,7 +148,7 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 
 	for i := range timeCoherent {
 		if !hasPrev {
-			timeCoherent[i] = presence[i] // Initial frame fallback
+			timeCoherent[i] = presence[i]
 		} else {
 			timeCoherent[i] = math.Sqrt(presence[i] * af.prevPresence[i])
 		}
@@ -191,26 +178,22 @@ func (af *AffordanceField) Update(mag []float64) []float64 {
 		}
 	}
 
-	// 6. Harmonic Coherence
 	coherence := af.harmonicCoherence(mag)
 
-	// Integration (Weighted combination instead of strict geometric mean if features are missing)
 	field := make([]float64, n)
 	for i := range field {
-		// Use a slightly more robust integration for initial frames
+
 		featSum := presence[i] + normPersistence[i] + continuity[i] + change[i]
 		if featSum == 0 {
 			field[i] = 0
 			continue
 		}
 
-		// Geometric mean but with small epsilon or fallback
 		eps := 0.01
 		features := (presence[i] + eps) * (normPersistence[i] + eps) * (continuity[i] + eps) * (change[i] + eps) * (coherence[i] + eps)
 		field[i] = availability[i] * math.Pow(features, 0.2)
 	}
 
-	// Update temporal state
 	copy(af.prevPresence, presence)
 
 	return field
@@ -240,7 +223,6 @@ func (af *AffordanceField) harmonicCoherence(mag []float64) []float64 {
 		coherence[i] = score
 	}
 
-	// Normalize
 	maxCoh := 0.0
 	for _, v := range coherence {
 		if v > maxCoh {

@@ -25,9 +25,9 @@ func (m *MultiF0Tracker) ComputeSalience(spectrum []float64, freqs []float64, af
 			if fh > freqs[len(freqs)-1] {
 				break
 			}
-			// Find nearest frequency bin
+
 			idx := m.findNearest(freqs, fh)
-			// Add weighted magnitude (with tolerance window)
+
 			window := 3
 			start := idx - window
 			if start < 0 {
@@ -37,7 +37,7 @@ func (m *MultiF0Tracker) ComputeSalience(spectrum []float64, freqs []float64, af
 			if end > len(spectrum) {
 				end = len(spectrum)
 			}
-			
+
 			maxVal := 0.0
 			for k := start; k < end; k++ {
 				if spectrum[k] > maxVal {
@@ -47,7 +47,6 @@ func (m *MultiF0Tracker) ComputeSalience(spectrum []float64, freqs []float64, af
 			total += harmonicWeights[h-1] * maxVal
 		}
 
-		// Apply Affordance Weighting if provided
 		if affordance != nil {
 			affIdx := m.findNearest(freqs, f0)
 			total *= affordance[affIdx]
@@ -56,8 +55,6 @@ func (m *MultiF0Tracker) ComputeSalience(spectrum []float64, freqs []float64, af
 		salience[i] = total
 	}
 
-
-	// Normalize
 	maxSal := 0.0
 	for _, v := range salience {
 		if v > maxSal {
@@ -106,19 +103,19 @@ func (m *MultiF0Tracker) DetectPeaks(f0Candidates []float64, salience []float64)
 	var peaks []Peak
 	for i := 1; i < len(salience)-1; i++ {
 		if salience[i] > salience[i-1] && salience[i] > salience[i+1] && salience[i] >= m.Config.PeakThreshold {
-			// Parabolic interpolation
+
 			alpha := salience[i-1]
 			beta := salience[i]
 			gamma := salience[i+1]
-			
+
 			denom := alpha - 2*beta + gamma
 			if math.Abs(denom) > 1e-10 {
 				offset := 0.5 * (alpha - gamma) / denom
-				
+
 				logF0 := math.Log2(f0Candidates[i])
 				logStep := math.Log2(f0Candidates[i+1] / f0Candidates[i])
 				refinedFreq := math.Pow(2, logF0+offset*logStep)
-				
+
 				peaks = append(peaks, Peak{Freq: refinedFreq, Salience: beta})
 			} else {
 				peaks = append(peaks, Peak{Freq: f0Candidates[i], Salience: beta})
