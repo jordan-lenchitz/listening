@@ -33,17 +33,17 @@ a high-performance ecologically inspired multi-pitch tracker mirroring the resea
 
 the project includes an expansive suite of high-performance microservices
 
-1. **orchestrator** (:8080) entry point which decodes audio and manages the pipeline
-2. **dsp** (:8081) computes stft coefficients
-3. **tracking** (:8082) performs pitch tracking logic
-4. **visualizer** (:8083) generates results plots
-5. **auth** (:8084) - modern JWT-based authentication (signing/verification)
-6. **logger** (:8085) - centralized logging hub
-7. **storage** (:8086) - artifact persistence service
-8. **music-theory** (:8087) - computational musicology service
-9. **fsst** (:8088) - advanced time-frequency reassignment
-10. **health** (:8089) - cluster health monitoring
-11. **config** (:8090) - dynamic configuration provider
+1. **orchestrator** (:8080) affords an entry point which decodes audio and manages the pipeline
+2. **dsp** (:8081) affords stft coefficients
+3. **tracking** (:8082) affords pitch tracking logic
+4. **visualizer** (:8083) affords results plots
+5. **auth** (:8084) affords modern JWT-based authentication
+6. **logger** (:8085) affords centralized logging 
+7. **storage** (:8086) affords artifact persistence 
+8. **music-theory** (:8087) affords computational musicology 
+9. **fsst** (:8088) affords advanced time-frequency reassignment
+10. **health** (:8089) affords cluster health monitoring
+11. **config** (:8090) affords a dynamic configuration provider
 
 ### howto (microservices)
 
