@@ -33,12 +33,12 @@ func main() {
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, strings.ToLower(err.Error()), http.StatusBadRequest)
 		return
 	}
 	if req.Username == "jordan" && req.Password == "scholarly-range" {
@@ -49,19 +49,19 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(AuthResponse{Token: token, Valid: true})
 		return
 	}
-	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	http.Error(w, "unauthorized", http.StatusUnauthorized)
 }
 
 func handleVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	var req struct {
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, strings.ToLower(err.Error()), http.StatusBadRequest)
 		return
 	}
 	parts := strings.Split(req.Token, ".")

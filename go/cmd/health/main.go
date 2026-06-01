@@ -20,7 +20,7 @@ func main() {
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	resp := HealthResponse{
-		Status:    "OK",
+		Status:    "ok",
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 	w.Header().Set("Content-Type", "application/json")

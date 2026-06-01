@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/jordan-lenchitz/listening/go/pkg/music"
 )
@@ -27,12 +28,12 @@ func main() {
 
 func handleCalculate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	var req JIRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, strings.ToLower(err.Error()), http.StatusBadRequest)
 		return
 	}
 	ji := music.NewJustIntonation(req.BaseFreq)

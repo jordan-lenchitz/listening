@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/jordan-lenchitz/listening/go/pkg/tracking"
 )
@@ -25,13 +26,13 @@ func main() {
 
 func handleVisualize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req VisualizeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, strings.ToLower(err.Error()), http.StatusBadRequest)
 		return
 	}
 
@@ -44,14 +45,14 @@ func handleVisualize(w http.ResponseWriter, r *http.Request) {
 
 	tmpFile := "temp_result.png"
 	if err := result.Visualize(tmpFile, req.Title); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, strings.ToLower(err.Error()), http.StatusInternalServerError)
 		return
 	}
 	defer os.Remove(tmpFile)
 
 	data, err := os.ReadFile(tmpFile)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, strings.ToLower(err.Error()), http.StatusInternalServerError)
 		return
 	}
 
