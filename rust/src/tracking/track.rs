@@ -15,10 +15,11 @@ pub struct VoiceTrack {
     pub frames: Vec<usize>,
     pub state: VoiceState,
     pub inactive_count: usize,
+    pub is_extra: bool,
 }
 
 impl VoiceTrack {
-    pub fn new(id: usize, start_frame: usize) -> Self {
+    pub fn new(id: usize, start_frame: usize, is_extra: bool) -> Self {
         Self {
             id,
             start_frame,
@@ -27,6 +28,7 @@ impl VoiceTrack {
             frames: Vec::new(),
             state: VoiceState::Tentative,
             inactive_count: 0,
+            is_extra,
         }
     }
 
