@@ -74,6 +74,7 @@ fn process_loop(rx: Receiver<Vec<f32>>, sr: f64) -> Result<(), Box<dyn std::erro
     let frame_size = 2048;
     let yin = Yin::new(frame_size, sr, 65.0, 1000.0);
     let mut tracker = BayesianTracker::new(65.0, 1000.0, 60, 0.98);
+    let mut multi_tracker = crate::tracking::MultiF0Tracker::new();
     let mut affordance = crate::tracking::affordance::AffordanceField::new(sr, frame_size);
 
     let mut planner = realfft::RealFftPlanner::<f64>::new();
@@ -82,6 +83,8 @@ fn process_loop(rx: Receiver<Vec<f32>>, sr: f64) -> Result<(), Box<dyn std::erro
     let mut fft_out = r2c.make_output_vec();
 
     let mut buffer = Vec::new();
+    let mut frame_count = 0;
+
     while let Ok(data) = rx.recv() {
         buffer.extend(data);
         
@@ -95,15 +98,39 @@ fn process_loop(rx: Receiver<Vec<f32>>, sr: f64) -> Result<(), Box<dyn std::erro
             let field = affordance.update(&mag);
             let meas_lh = tracker.map_affordance_field(&affordance.freqs, &field);
             
+            // Peak detection on measurement likelihood
+            let mut peaks = Vec::new();
+            for i in 1..meas_lh.len() - 1 {
+                if meas_lh[i] > meas_lh[i-1] && meas_lh[i] > meas_lh[i+1] && meas_lh[i] > 0.1 {
+                    peaks.push((tracker.freq_grid[i], meas_lh[i]));
+                }
+            }
+
+            // Update Multi-F0 tracker
+            multi_tracker.update(frame_count, &peaks);
+
             if let Some((f0, conf)) = yin.estimate(&frame) {
                 let _post = tracker.update(&meas_lh, Some(f0), conf);
-                
-                if conf > 0.5 {
-                    println!("Detected F0: {:.1} Hz (conf: {:.2})", f0, conf);
-                }
             } else {
                 let _post = tracker.update(&meas_lh, None, 0.0);
             }
+
+            // Print active tracks
+            let active_tracks: Vec<_> = multi_tracker.tracks.iter()
+                .filter(|t| t.state == crate::tracking::track::VoiceState::Active)
+                .collect();
+
+            if !active_tracks.is_empty() {
+                print!("\rFrame {}: ", frame_count);
+                for t in active_tracks {
+                    let kind = if t.is_extra { "ghost" } else { "voice" };
+                    print!("[ID {} {}: {:.1} Hz] ", t.id, kind, t.pitches.last().unwrap());
+                }
+                use std::io::Write;
+                std::io::stdout().flush().unwrap();
+            }
+
+            frame_count += 1;
         }
     }
 
