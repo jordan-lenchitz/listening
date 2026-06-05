@@ -1,9 +1,9 @@
-mod dsp;
-mod tracking;
-
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use crate::dsp::yin::Yin;
-use crate::tracking::BayesianTracker;
+use listening_tracker::dsp::yin::Yin;
+use listening_tracker::tracking::BayesianTracker;
+use listening_tracker::tracking::MultiF0Tracker;
+use listening_tracker::tracking::affordance::AffordanceField;
+use listening_tracker::tracking::track::VoiceState;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::env;
 
@@ -74,8 +74,8 @@ fn process_loop(rx: Receiver<Vec<f32>>, sr: f64) -> Result<(), Box<dyn std::erro
     let frame_size = 2048;
     let yin = Yin::new(frame_size, sr, 65.0, 1000.0);
     let mut tracker = BayesianTracker::new(65.0, 1000.0, 60, 0.98);
-    let mut multi_tracker = crate::tracking::MultiF0Tracker::new();
-    let mut affordance = crate::tracking::affordance::AffordanceField::new(sr, frame_size);
+    let mut multi_tracker = listening_tracker::tracking::MultiF0Tracker::new();
+    let mut affordance = listening_tracker::tracking::affordance::AffordanceField::new(sr, frame_size);
 
     let mut planner = realfft::RealFftPlanner::<f64>::new();
     let r2c = planner.plan_fft_forward(frame_size);
@@ -117,7 +117,7 @@ fn process_loop(rx: Receiver<Vec<f32>>, sr: f64) -> Result<(), Box<dyn std::erro
 
             // Print active tracks
             let active_tracks: Vec<_> = multi_tracker.tracks.iter()
-                .filter(|t| t.state == crate::tracking::track::VoiceState::Active)
+                .filter(|t| t.state == listening_tracker::tracking::track::VoiceState::Active)
                 .collect();
 
             if !active_tracks.is_empty() {

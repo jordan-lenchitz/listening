@@ -46,7 +46,7 @@ impl MultiF0Tracker {
     pub fn update(&mut self, frame: usize, detected_peaks: &[(f64, f64)]) {
         self.current_frame = frame;
         
-        let mut active_indices: Vec<usize> = self.tracks.iter().enumerate()
+        let active_indices: Vec<usize> = self.tracks.iter().enumerate()
             .filter(|(_, t)| t.state != VoiceState::Terminated)
             .map(|(i, _)| i)
             .collect();
@@ -62,7 +62,7 @@ impl MultiF0Tracker {
 
         // Simple greedy assignment (replacement for matchpairs/Hungarian for now)
         // In a real expansion, we'd use the 'pathfinding' crate for Munkres
-        let mut unassigned_peaks: Vec<(f64, f64)> = detected_peaks.to_vec();
+        let unassigned_peaks: Vec<(f64, f64)> = detected_peaks.to_vec();
         let mut assigned_peaks = vec![false; detected_peaks.len()];
         let mut assigned_tracks = vec![false; active_indices.len()];
 
@@ -138,9 +138,48 @@ impl MultiF0Tracker {
     }
 
     fn create_track(&mut self, frame: usize, pitch: f64, conf: f64, is_extra: bool) {
-        let mut track = VoiceTrack::new(self.next_track_id, frame, is_extra);
+        let track_id = self.next_track_id;
+        self.next_track_id += 1;
+
+        // Try to reuse a terminated track
+        for track in self.tracks.iter_mut() {
+            if track.state == VoiceState::Terminated {
+                track.reset(track_id, frame, is_extra);
+                track.add_observation(frame, pitch, conf);
+                return;
+            }
+        }
+
+        // No terminated tracks found, push a new one
+        let mut track = VoiceTrack::new(track_id, frame, is_extra);
         track.add_observation(frame, pitch, conf);
         self.tracks.push(track);
-        self.next_track_id += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_track_reuse() {
+        let mut tracker = MultiF0Tracker::new();
+        tracker.inactive_frames = 1;
+        
+        // 1. Create a track
+        tracker.update(0, &[(440.0, 0.9)]);
+        assert_eq!(tracker.tracks.len(), 1);
+        assert_eq!(tracker.tracks[0].id, 0);
+        
+        // 2. Terminate the track
+        tracker.update(1, &[]); // No peaks, should become Inactive
+        tracker.update(2, &[]); // Still no peaks, should become Terminated (since inactive_frames=1)
+        assert_eq!(tracker.tracks[0].state, VoiceState::Terminated);
+        
+        // 3. Create a new track, should reuse slot 0
+        tracker.update(3, &[(220.0, 0.9)]);
+        assert_eq!(tracker.tracks.len(), 1);
+        assert_eq!(tracker.tracks[0].id, 1);
+        assert_eq!(tracker.tracks[0].pitches[0], 220.0);
     }
 }
