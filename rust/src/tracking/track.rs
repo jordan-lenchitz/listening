@@ -38,4 +38,15 @@ impl VoiceTrack {
         self.confidences.push(confidence);
         self.inactive_count = 0;
     }
+
+    pub fn reset(&mut self, id: usize, start_frame: usize, is_extra: bool) {
+        self.id = id;
+        self.start_frame = start_frame;
+        self.pitches.clear();
+        self.confidences.clear();
+        self.frames.clear();
+        self.state = VoiceState::Tentative;
+        self.inactive_count = 0;
+        self.is_extra = is_extra;
+    }
 }

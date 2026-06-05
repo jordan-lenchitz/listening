@@ -16,3 +16,12 @@ dashmap = "5.5" # Concurrent hash map for real-time state
 crossbeam-channel = "0.5" # Thread communication for audio stream
 ringbuf = "0.3" # Lock-free ring buffer
 itertools = "0.11"
+ratatui = "0.26"
+crossterm = "0.27"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "tracker_bench"
+harness = false
