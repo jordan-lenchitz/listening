@@ -1,31 +1,29 @@
+"SC_STARTUP: SCLANG BOOT SEQUENCE STARTED".postln;
+
 (
-"SC_STARTUP: Initializing Server Options...".postln;
+"SC_STARTUP: Setting options...".postln;
 s.options.numOutputBusChannels = 2;
 s.options.numInputBusChannels = 0;
 s.options.memSize = 8192 * 32;
-s.options.maxNodes = 1024 * 4;
 s.options.device = "Dummy"; 
 
-"SC_STARTUP: Attempting to boot server...".postln;
+"SC_STARTUP: Attempting server boot...".postln;
 
 s.waitForBoot({
     var tracker, backendAddr;
     
-    "SC_STARTUP: Server Booted Successfully.".postln;
+    "SC_STARTUP: Server Booted.".postln;
     
-    tracker = ListeningTracker.new(s.sampleRate, 2048);
+    tracker = ListeningTracker.new(44100, 2048);
     backendAddr = NetAddr("127.0.0.1", 57121);
-    
-    "SC_STARTUP: ListeningTracker Initialized.".postln;
     
     OSCdef(\process_audio, { |msg|
         var jobId = msg[1].asString;
         var filePath = msg[2].asString;
         var result;
         
-        "SC_JOB: Received Job % for File %".format(jobId, filePath).postln;
+        "SC_JOB: %".format(jobId).postln;
         
-        // Offline processing placeholder
         result = (
             jobId: jobId,
             status: "complete",
@@ -39,13 +37,11 @@ s.waitForBoot({
         );
         
         backendAddr.sendMsg("/result", jobId, result.asJSON);
-        "SC_JOB: Sent result for %".format(jobId).postln;
-        
     }, '/process');
     
-    "SC_STARTUP: OSC Listener Ready on port 57120".postln;
+    "SC_STARTUP: OSC Ready.".postln;
 }, {
-    "SC_STARTUP: ERROR - Server failed to boot!".postln;
+    "SC_STARTUP: FAILED TO BOOT SERVER".postln;
     0.exit;
 });
 )
