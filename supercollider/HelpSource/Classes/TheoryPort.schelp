@@ -1,0 +1,6 @@
+TITLE:: TheoryPort
+summary:: Bridge to Music Theory logic and harmonic analysis.
+categories:: Music Theory, Analysis
+
+DESCRIPTION::
+TheoryPort connects the tracking system to higher-level music theory concepts, such as chord identification, key detection, and harmonic progression analysis.

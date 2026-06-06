@@ -1,0 +1,72 @@
+TITLE:: AffordanceField
+summary:: A spectral feature extraction system based on James J. Gibson's theory of affordances.
+categories:: Analysis, Pitch
+related:: Classes/MultiF0Tracker, Classes/AuditorySceneAnalysis
+
+DESCRIPTION::
+AffordanceField is a sophisticated spectral analysis class that implements a "field of affordances" for auditory perception. Unlike traditional peak-picking algorithms, AffordanceField treats the spectrum as a landscape of potential actions and perceptions. 
+
+The implementation is inspired by James J. Gibson's ecological psychology, specifically the concept that the environment (in this case, the acoustic spectrum) offers "affordances" to the observer. In the context of the Listening Dissertation, an affordance is a frequency region that "invites" tracking or identification based on its physical and structural properties.
+
+The class calculates several layers of "perceptual features" for each frequency bin:
+
+LIST::
+## STRONG::Presence::: The raw normalized magnitude of the bin.
+## STRONG::Availability::: A measure of how "available" a frequency is, taking into account psychoacoustic masking (modeled via ERB scales) and spectral dominance.
+## STRONG::Persistence::: A temporal leaky integrator that tracks how long a frequency has been present, favoring stable sources.
+## STRONG::Change::: The positive derivative of presence, highlighting onset-like events and "new" information.
+## STRONG::Continuity::: A measure of how well a bin connects to its previous state and its spectral neighbors.
+## STRONG::Coherence::: (Stub) Represents the phase or harmonic coherence of the signal.
+::
+
+These features are integrated using a power-law fusion to produce the final "Affordance Field".
+
+CLASSMETHODS::
+
+METHOD:: new
+Create a new AffordanceField.
+
+ARGUMENT:: sampleRate
+The sample rate of the input signal (default: 44100).
+
+ARGUMENT:: frameSize
+The FFT frame size used for analysis (default: 2048).
+
+INSTANCEMETHODS::
+
+METHOD:: update
+Process a new magnitude spectrum and return the calculated affordance field.
+
+ARGUMENT:: mag
+A FloatArray containing the magnitude spectrum (half the frame size + 1).
+
+RETURNS:: A FloatArray representing the integrated affordance field.
+
+METHOD:: smoothAlongERB
+Apply Gaussian smoothing across the frequency axis, where the sigma of the Gaussian is scaled by the Equivalent Rectangular Bandwidth (ERB) of each bin.
+
+ARGUMENT:: x
+The array to smooth.
+
+ARGUMENT:: sigmaERB
+The smoothing width in ERB units.
+
+EXAMPLES::
+
+code::
+// Basic usage with a mock spectrum
+a = AffordanceField.new(44100, 2048);
+m = FloatArray.fill(1025, { 0.1.rand });
+m[100] = 0.8; // A simulated peak
+f = a.update(m);
+f.plot;
+::
+
+THEORETICAL BACKGROUND::
+The "Affordance Field" is a concept adapted from dynamic systems theory and ecological psychology. In this implementation, we define the "field" as a mapping from frequency to "perceptual salience" or "readiness for tracking." By integrating temporal persistence and spectral continuity, we can suppress transient noise and focus on stable, coherent auditory objects.
+
+The availability calculation:
+formula::
+availability[i] = ((db[i] - peakDB - maskingFloorDB) / (0.0 - maskingFloorDB)).clip(0.0, 1.0)
+::
+This ensures that signals buried deep under the loudest peak are ignored, simulating the forward and simultaneous masking properties of the human ear.

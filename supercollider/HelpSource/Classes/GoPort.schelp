@@ -1,0 +1,7 @@
+TITLE:: GoPort
+summary:: Interface for Go-based tracking services.
+categories:: External, Bridge
+related:: Classes/PythonPort
+
+DESCRIPTION::
+GoPort provides a bridge between SuperCollider and the high-performance Go implementation of the tracking system. It handles network communication, data serialization (JSON), and process management for the Go backend.

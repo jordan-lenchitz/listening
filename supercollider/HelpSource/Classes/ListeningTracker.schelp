@@ -1,0 +1,6 @@
+TITLE:: ListeningTracker
+summary:: The primary entry point for real-time tracking.
+categories:: Analysis, Pitch
+
+DESCRIPTION::
+ListeningTracker is a high-level wrapper that simplifies the setup and execution of the entire tracking pipeline for real-time performance.
