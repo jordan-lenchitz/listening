@@ -1,1 +1,3 @@
 *.sc linguist-language=SuperCollider
+*.scd linguist-language=SuperCollider
+*.schelp linguist-language=SuperCollider
