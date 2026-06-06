@@ -1,26 +1,34 @@
-# use python 3.12 slim for a small image size
-from python:3.12-slim
+# Use a Python base image with Debian Bookworm
+FROM python:3.12-slim-bookworm
 
-# install system dependencies for audio processing
-run apt-get update && apt-get install -y \
-    build-essential \
+# Install SuperCollider and system dependencies
+RUN apt-get update && apt-get install -y \
+    supercollider-language \
+    supercollider-server \
+    supercollider-common \
     libsndfile1 \
+    xvfb \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# set the working directory
-workdir /app
+# Set the working directory
+WORKDIR /app
 
-# copy requirements and install
-copy python/requirements.txt .
-run pip install --no-cache-dir -r requirements.txt
-run pip install --no-cache-dir streamlit
+# Copy requirements and install Python dependencies
+COPY python/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir fastapi uvicorn python-multipart python-osc
 
-# copy the app code
-copy python/streamlit_app.py .
-copy python/affordance_field.py .
+# Copy the entire project
+COPY . .
 
-# expose streamlit port
-expose 8080
+# Environment setup for headless SuperCollider
+ENV DISPLAY=:99
+ENV HOME=/root
 
-# run streamlit
-cmd ["streamlit", "run", "streamlit_app.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.enableCORS=false", "--server.enableXsrfProtection=false", "--server.headless=true", "--server.enableWebsocketCompression=false", "--browser.gatherUsageStats=false"]
+# Expose the Cloud Run port
+EXPOSE 8080
+
+# Start command: use xvfb-run to provide a virtual display for SuperCollider if needed
+# though sclang is mostly CLI, scsynth sometimes benefits from it.
+CMD ["xvfb-run", "-a", "python3", "python/sc_backend.py"]
