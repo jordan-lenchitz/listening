@@ -7,6 +7,8 @@ import ssqueezepy
 from affordance_field import AffordanceField
 import tempfile
 import os
+import matplotlib
+matplotlib.use('Agg')
 
 st.set_page_config(page_title="listening dissertation demo", layout="wide")
 
@@ -33,7 +35,7 @@ def process_audio_full(file_bytes, file_name):
     
     # STFT - use float32/complex64 for memory efficiency
     stft = librosa.stft(y, n_fft=n_fft, hop_length=hop_length, dtype=np.complex64)
-    mag = np.abs(stft)
+    mag = np.abs(stft).astype(np.float32)
     S_db = librosa.amplitude_to_db(mag, ref=np.max).astype(np.float32)
     
     # SSQ - limit to 10s to avoid OOM
@@ -80,18 +82,17 @@ cmap_option = st.sidebar.selectbox(
 uploaded_file = st.file_uploader("upload an audio file mp3 wav etc", type=["mp3", "wav", "m4a", "flac"])
 
 if uploaded_file is not None:
-    st.write("file detected starting processing")
+    st.write(f"file {uploaded_file.name} detected starting processing")
     try:
         file_bytes = uploaded_file.getvalue()
         
-        with st.status("processing audio this may take a minute") as status:
+        with st.spinner("processing audio..."):
             results = process_audio_full(file_bytes, uploaded_file.name)
             if results is None:
                 st.error("failed to process audio")
                 st.stop()
-            status.update(label="processing complete", state="complete")
 
-        # extract results to local variables to avoid repeated dict lookups/copies
+        # extract results to local variables
         y = results["y"]
         sr = results["sr"]
         S_db = results["S_db"]
@@ -111,13 +112,14 @@ if uploaded_file is not None:
         with col1:
             st.subheader("spectrogram")
             fig_spec, ax_spec = plt.subplots(figsize=(8, 5))
-            # Use imshow for efficiency instead of specshow which can be slow
+            # Use imshow for efficiency
+            duration = len(y) / sr
             img = ax_spec.imshow(
                 S_db, 
                 aspect='auto', 
                 origin='lower', 
                 cmap='magma',
-                extent=[0, len(y)/sr, 0, sr/2],
+                extent=[0, duration, 0, sr/2],
                 vmin=-80, vmax=0
             )
             ax_spec.set_ylim([0, 8000])
@@ -130,8 +132,13 @@ if uploaded_file is not None:
         with col2:
             st.subheader("synchrosqueezed ssq")
             fig_ssq, ax_ssq = plt.subplots(figsize=(8, 5))
-            img_ssq = ax_ssq.imshow(Tx_mag, aspect='auto', origin='lower', cmap='magma', 
-                                   extent=[0, duration_ssq, 0, sr/2])
+            img_ssq = ax_ssq.imshow(
+                Tx_mag, 
+                aspect='auto', 
+                origin='lower', 
+                cmap='magma', 
+                extent=[0, duration_ssq, 0, sr/2]
+            )
             ax_ssq.set_ylim([0, 8000])
             ax_ssq.set_xlabel("time s")
             ax_ssq.set_ylabel("freq hz")
@@ -142,7 +149,12 @@ if uploaded_file is not None:
         with col3:
             st.subheader("cepstrogram")
             fig_cep, ax_cep = plt.subplots(figsize=(8, 5))
-            img_cep = ax_cep.imshow(cepstrogram_display, aspect='auto', origin='lower', cmap='viridis')
+            img_cep = ax_cep.imshow(
+                cepstrogram_display, 
+                aspect='auto', 
+                origin='lower', 
+                cmap='viridis'
+            )
             ax_cep.set_xlabel("time frames")
             ax_cep.set_ylabel("quefrency bins")
             fig_cep.colorbar(img_cep, ax=ax_cep)
@@ -171,7 +183,9 @@ if uploaded_file is not None:
         st.audio(file_bytes, format=f"audio/{os.path.splitext(uploaded_file.name)[1][1:]}")
 
     except Exception as e:
-        st.error(f"error during processing {str(e).lower()}")
+        st.error(f"error during processing: {str(e).lower()}")
+        import traceback
+        st.code(traceback.format_exc())
 
 else:
     st.info("welcome please upload an audio file to begin the spectral analysis the processing will start immediately after the upload is complete")
