@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     supercollider-server \
     supercollider-common \
     libsndfile1 \
+    xvfb \
     libqt5widgets5 \
     libqt5gui5 \
     libqt5core5a \
