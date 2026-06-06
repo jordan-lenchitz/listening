@@ -81,12 +81,12 @@ def start_sclang():
         return
 
     try:
-        # Check if sclang is in path
-        sclang_path = subprocess.check_output(["which", "sclang"]).decode().strip()
-        logger.info(f"sclang path: {sclang_path}")
+        # Set offscreen platform for Qt
+        env = os.environ.copy()
+        env["QT_QPA_PLATFORM"] = "offscreen"
         
-        # Use xvfb-run just for the sclang process to be absolutely sure
-        cmd = ["xvfb-run", "-a", "sclang", startup_script]
+        cmd = ["sclang", startup_script]
+        logger.info(f"Spawning sclang: {' '.join(cmd)}")
         
         process = subprocess.Popen(
             cmd,
@@ -94,16 +94,18 @@ def start_sclang():
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1, # Line buffered
-            env=os.environ.copy()
+            env=env
         )
         
         def log_output(stream, prefix):
             for line in stream:
+                # Use print for immediate flushing to stdout if logger is slow
+                print(f"{prefix}: {line.strip()}", flush=True)
                 logger.info(f"{prefix}: {line.strip()}")
                 
         threading.Thread(target=log_output, args=(process.stdout, "SC-STDOUT"), daemon=True).start()
         threading.Thread(target=log_output, args=(process.stderr, "SC-STDERR"), daemon=True).start()
-        logger.info(f"sclang process spawned with cmd: {' '.join(cmd)}")
+        logger.info("sclang process spawned.")
     except Exception as e:
         logger.error(f"Failed to spawn sclang: {e}")
 
