@@ -81,10 +81,6 @@ def start_sclang():
         return
 
     try:
-        # Set offscreen platform for Qt
-        env = os.environ.copy()
-        env["QT_QPA_PLATFORM"] = "offscreen"
-        
         cmd = ["sclang", startup_script]
         logger.info(f"Spawning sclang: {' '.join(cmd)}")
         
@@ -94,7 +90,7 @@ def start_sclang():
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1, # Line buffered
-            env=env
+            env=os.environ.copy()
         )
         
         def log_output(stream, prefix):
