@@ -42,45 +42,59 @@ if uploaded_file is not None:
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            result = None
-            for i in range(60): # 60 seconds timeout
-                progress_bar.progress((i + 1) / 60)
-                status_text.text(f"analyzing... {i+1}s")
-                
+            results_area = st.empty()
+            
+            finished = False
+            for i in range(300): # 5 minute timeout
                 res_resp = requests.get(f"http://localhost:8000/result/{job_id}")
                 if res_resp.status_code == 200:
-                    result = res_resp.json()
-                    break
+                    batch_data = res_resp.json()
+                    
+                    if isinstance(batch_data, dict) and "chunks" in batch_data:
+                        chunks_done = len(batch_data["chunks"])
+                        total_chunks = batch_data["total_chunks"]
+                        progress = chunks_done / total_chunks
+                        progress_bar.progress(progress)
+                        status_text.text(f"analyzing chunks... {chunks_done}/{total_chunks}")
+                        
+                        # Update results display
+                        with results_area.container():
+                            st.header("supercollider analysis results (chunked)")
+                            for idx_str in sorted(batch_data["chunks"].keys(), key=int):
+                                idx = int(idx_str)
+                                chunk_result = batch_data["chunks"][idx_str]
+                                with st.expander(f"chunk {idx} ({idx*10}s - {idx*10+10}s)", expanded=(idx == chunks_done - 1)):
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.write(f"**voices**: {chunk_result.get('voices')}")
+                                        for track in chunk_result.get('tracks', []):
+                                            st.markdown(f"- **track {track['id']}**: {track['freq']} Hz ({track['label']})")
+                                    with col2:
+                                        af_data = chunk_result.get('affordanceField', [])
+                                        if af_data:
+                                            fig, ax = plt.subplots(figsize=(4, 2))
+                                            ax.bar(range(len(af_data)), af_data, color='blue')
+                                            ax.set_title(f"affordance chunk {idx}")
+                                            st.pyplot(fig)
+                                            plt.close(fig)
+
+                        if batch_data["status"] == "complete":
+                            st.success("all chunks complete!")
+                            finished = True
+                            break
+                    else:
+                        # Fallback for single result
+                        st.success("analysis complete!")
+                        st.json(batch_data)
+                        finished = True
+                        break
                 time.sleep(1)
             
-            if result:
-                st.success("analysis complete!")
-                
-                # 3. Display results
-                st.header("supercollider analysis results")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("detected voices")
-                    st.write(f"count: {result.get('voices')}")
-                    for track in result.get('tracks', []):
-                        st.markdown(f"**track {track['id']}**: {track['freq']} Hz ({track['label']}) - stability: {track['stability']}")
-                
-                with col2:
-                    st.subheader("spectral affordance field (preview)")
-                    af_data = result.get('affordanceField', [])
-                    if af_data:
-                        fig, ax = plt.subplots()
-                        ax.bar(range(len(af_data)), af_data, color='viridis')
-                        ax.set_title("affordance magnitudes")
-                        st.pyplot(fig)
-                        plt.close(fig)
-                
-                # Audio player
-                st.audio(uploaded_file.getvalue(), format=f"audio/{os.path.splitext(uploaded_file.name)[1][1:]}")
-            else:
+            if not finished:
                 st.error("analysis timed out or failed")
+            
+            # Audio player
+            st.audio(uploaded_file.getvalue(), format=f"audio/{os.path.splitext(uploaded_file.name)[1][1:]}")
         else:
             st.error(f"failed to start processing: {resp.text}")
     except Exception as e:
