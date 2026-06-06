@@ -6,7 +6,7 @@ import logging
 import sys
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.responses import JSONResponse
-from python_osc import udp_client, dispatcher, osc_server
+from pythonosc import udp_client, dispatcher, osc_server
 import threading
 import tempfile
 
