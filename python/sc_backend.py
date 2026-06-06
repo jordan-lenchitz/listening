@@ -81,8 +81,15 @@ def start_sclang():
         return
 
     try:
+        # Check if sclang is in path
+        sclang_path = subprocess.check_output(["which", "sclang"]).decode().strip()
+        logger.info(f"sclang path: {sclang_path}")
+        
+        # Use xvfb-run just for the sclang process to be absolutely sure
+        cmd = ["xvfb-run", "-a", "sclang", startup_script]
+        
         process = subprocess.Popen(
-            ["sclang", startup_script],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -96,7 +103,7 @@ def start_sclang():
                 
         threading.Thread(target=log_output, args=(process.stdout, "SC-STDOUT"), daemon=True).start()
         threading.Thread(target=log_output, args=(process.stderr, "SC-STDERR"), daemon=True).start()
-        logger.info("sclang process spawned.")
+        logger.info(f"sclang process spawned with cmd: {' '.join(cmd)}")
     except Exception as e:
         logger.error(f"Failed to spawn sclang: {e}")
 
