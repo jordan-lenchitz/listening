@@ -2,14 +2,14 @@
 FROM python:3.12-slim-bookworm
 
 # Install SuperCollider and system dependencies
-# We need xvfb and some qt libs to keep sclang happy even in headless mode
 RUN apt-get update && apt-get install -y \
     supercollider-language \
     supercollider-server \
     supercollider-common \
     libsndfile1 \
-    xvfb \
     libqt5widgets5 \
+    libqt5gui5 \
+    libqt5core5a \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,4 +37,4 @@ RUN chmod +x entrypoint.sh
 EXPOSE 8080
 
 # Start command
-CMD ["xvfb-run", "-a", "./entrypoint.sh"]
+CMD ["./entrypoint.sh"]
