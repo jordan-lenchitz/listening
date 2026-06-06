@@ -16,7 +16,7 @@ WORKDIR /app
 # Copy requirements and install Python dependencies
 COPY python/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir fastapi uvicorn python-multipart python-osc
+RUN pip install --no-cache-dir fastapi uvicorn python-multipart python-osc streamlit requests
 
 # Copy the entire project
 COPY . .
@@ -24,9 +24,13 @@ COPY . .
 # Environment setup
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/root
+ENV BACKEND_PORT=8000
+
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
 
 # Expose the Cloud Run port
 EXPOSE 8080
 
-# Start command
-CMD ["python3", "python/sc_backend.py"]
+# Start command: use the shell script to start both processes
+CMD ["./entrypoint.sh"]
