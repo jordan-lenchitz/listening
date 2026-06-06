@@ -86,7 +86,8 @@ def start_sclang():
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1 # Line buffered
+            bufsize=1, # Line buffered
+            env=os.environ.copy()
         )
         
         def log_output(stream, prefix):

@@ -2,11 +2,14 @@
 FROM python:3.12-slim-bookworm
 
 # Install SuperCollider and system dependencies
+# We need xvfb and some qt libs to keep sclang happy even in headless mode
 RUN apt-get update && apt-get install -y \
     supercollider-language \
     supercollider-server \
     supercollider-common \
     libsndfile1 \
+    xvfb \
+    libqt5widgets5 \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,6 +28,7 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/root
 ENV BACKEND_PORT=8000
+ENV QT_QPA_PLATFORM=offscreen
 
 # Make entrypoint executable
 RUN chmod +x entrypoint.sh
@@ -32,5 +36,5 @@ RUN chmod +x entrypoint.sh
 # Expose the Cloud Run port
 EXPOSE 8080
 
-# Start command: use the shell script to start both processes
-CMD ["./entrypoint.sh"]
+# Start command
+CMD ["xvfb-run", "-a", "./entrypoint.sh"]

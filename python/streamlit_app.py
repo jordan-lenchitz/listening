@@ -43,8 +43,8 @@ if uploaded_file is not None:
             status_text = st.empty()
             
             result = None
-            for i in range(30): # 30 seconds timeout
-                progress_bar.progress((i + 1) / 30)
+            for i in range(60): # 60 seconds timeout
+                progress_bar.progress((i + 1) / 60)
                 status_text.text(f"analyzing... {i+1}s")
                 
                 res_resp = requests.get(f"http://localhost:8000/result/{job_id}")
