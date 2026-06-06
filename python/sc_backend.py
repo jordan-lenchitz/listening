@@ -81,6 +81,10 @@ def start_sclang():
         return
 
     try:
+        # Debug: Check version
+        v = subprocess.run(["sclang", "-v"], capture_output=True, text=True, env=os.environ.copy())
+        logger.info(f"sclang version output: {v.stdout} {v.stderr}")
+        
         cmd = ["sclang", startup_script]
         logger.info(f"Spawning sclang: {' '.join(cmd)}")
         
