@@ -1,0 +1,9 @@
+TITLE:: JustIntonation
+summary:: Mathematical models for Just Intonation and harmonic tuning.
+categories:: Music Theory, Math
+
+DESCRIPTION::
+JustIntonation provides tools for working with "pure" intervals based on integer ratios. This is critical for the Listening project, as vocal ensembles often gravitate towards Just Intonation to maximize harmonic resonance and minimize "beats" between overtones.
+
+THEORETICAL BACKGROUND::
+In Just Intonation, intervals are defined by ratios like 3:2 (Perfect Fifth) and 5:4 (Major Third). This class allows the tracker to "snap" detected pitches to the nearest just interval, improving tracking stability in polyphonic contexts.
