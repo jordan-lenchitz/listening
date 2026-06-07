@@ -257,7 +257,8 @@ PerceptualModel {
     // Leaky Integrator for persistence (Port of PERSIST^PERCEPT)
     persist { |freq, val, tau, dt|
         var alpha = (dt.neg / tau).exp;
-        var prev = state[\energy][freq].atFail(\persist, 0);
+        var energyDict = state[\energy][freq];
+        var prev = if(energyDict.notNil) { energyDict.atFail(\persist, { 0 }) } { 0 };
         var res = (alpha * prev) + ((1 - alpha) * val);
         
         if(state[\energy][freq].isNil) { state[\energy][freq] = Dictionary.new };
@@ -270,6 +271,7 @@ PerceptualModel {
         var smooth = this.persist(freq, val, tau, dt);
         var diff = val - smooth;
         if(diff < 0) { diff = 0 };
+        if(state[\energy][freq].isNil) { state[\energy][freq] = Dictionary.new };
         state[\energy][freq][\change] = diff;
         ^diff;
     }
@@ -278,7 +280,7 @@ PerceptualModel {
     bayesianUpdate { |freq, measLH, f0Fast, ridge|
         var alpha = 0.6;
         var beta = 0.3;
-        var prior = state[\prior].atFail(freq, 0);
+        var prior = state[\prior].atFail(freq, { 0 });
         
         var fp = this.gaussianWindow(freq, f0Fast, 15);
         var rp = this.gaussianWindow(freq, ridge, 10);
@@ -293,7 +295,7 @@ PerceptualModel {
     // Gaussian Window helper for priors (Port of WINDOW^PERCEPT)
     gaussianWindow { |freq, center, sigmaCents|
         var diff, sln, val;
-        if(center <= 0) { ^0 };
+        if(center.isNil || { center <= 0 }) { ^0 };
         sln = sigmaCents / 1200;
         diff = (freq / center).log;
         val = ( (diff * diff).neg / (2 * sln * sln) ).exp;
@@ -313,7 +315,7 @@ ScaleUtils {
 
     // Distance in Cents (Port of CENTS^SCALES)
     *cents { |f1, f2|
-        if(f1 == 0 or: {f2 == 0}) { ^0 };
+        if(f1 == 0 || { f2 == 0 }) { ^0 };
         ^1200 * ((f2 / f1).log / (2.log));
     }
 
