@@ -58,38 +58,43 @@ Percept {
     }
 
     init {
-        state = Dictionary.new;
+        state = Dictionary[
+            \persist -> Dictionary.new,
+            \change -> Dictionary.new,
+            \prior -> Dictionary.new
+        ];
     }
 
     persist { |freq, val, tau, dt|
         var alpha = (-dt / tau).exp;
-        var prev = state.atFail(\persist, freq, 0);
+        var persistDict = state[\persist];
+        var prev = persistDict.atFail(freq, { 0 });
         var newState = (alpha * prev) + ((1 - alpha) * val);
-        state.put(\persist, freq, newState);
+        persistDict.put(freq, newState);
         ^newState;
     }
 
     change { |freq, val, tau, dt|
         var smooth = this.persist(freq, val, tau, dt);
         var diff = (val - smooth).max(0);
-        state.put(\change, freq, diff);
+        state[\change].put(freq, diff);
         ^diff;
     }
 
     bUpdate { |freq, measLH, f0Fast, ridge|
         var alpha = 0.6, beta = 0.3;
-        var prior = state.atFail(\prior, freq, 0);
+        var prior = state[\prior].atFail(freq, { 0 });
         var fp = this.window(freq, f0Fast, 15);
         var rp = this.window(freq, ridge, 10);
         var comb = (alpha * fp) + (beta * rp) + ((1 - alpha - beta) * prior);
         var post = comb * measLH;
-        state.put(\prior, freq, post);
+        state[\prior].put(freq, post);
         ^post;
     }
 
     window { |freq, center, sigma|
         var sln, diff, val;
-        if (center.isNil or: { center <= 0 }) { ^0 };
+        if (center.isNil || { center <= 0 }) { ^0 };
         sln = sigma / 1200.0;
         diff = (freq / center).log;
         val = (-(diff * diff) / (2 * sln * sln)).exp;

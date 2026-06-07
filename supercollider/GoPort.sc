@@ -31,20 +31,22 @@ SalienceComputer {
 
         f0Candidates.do { |f0, i|
             var total = 0.0;
-            (1..nHarmonics).do { |h|
-                var fh = f0 * h;
-                var idx, window = 3, start, end, maxVal = 0.0;
-                
-                if (fh > freqs.last) { break.value };
-                
-                idx = this.findNearest(freqs, fh);
-                start = (idx - window).max(0);
-                end = (idx + window).min(spectrum.size - 1);
-                
-                (start..end).do { |k|
-                    if(spectrum[k] > maxVal) { maxVal = spectrum[k] };
+            block { |break|
+                (1..nHarmonics).do { |h|
+                    var fh = f0 * h;
+                    var idx, window = 3, start, end, maxVal = 0.0;
+                    
+                    if (fh > freqs.last) { break.value };
+                    
+                    idx = this.findNearest(freqs, fh);
+                    start = (idx - window).max(0);
+                    end = (idx + window).min(spectrum.size - 1);
+                    
+                    (start..end).do { |k|
+                        if(spectrum[k] > maxVal) { maxVal = spectrum[k] };
+                    };
+                    total = total + (harmonicWeights[h-1] * maxVal);
                 };
-                total = total + (harmonicWeights[h-1] * maxVal);
             };
 
             if(affordance.notNil) {

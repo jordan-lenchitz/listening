@@ -1,4 +1,6 @@
 Tables {
+    classvar <MIDItoFreq, <FreqToMIDI;
+
     *initClass {
     MIDItoFreq = [
         8.1757989156, // MIDI 0
