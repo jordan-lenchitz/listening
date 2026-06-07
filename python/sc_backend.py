@@ -89,6 +89,12 @@ def start_sclang():
         env["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
         env["QT_QPA_PLATFORM"] = "minimal"
         
+        # Test compilation
+        logger.info("Running sclang compilation test...")
+        test = subprocess.run(["sclang", "-a"], capture_output=True, text=True, env=env, timeout=30)
+        logger.info(f"Compilation test STDOUT: {test.stdout}")
+        logger.info(f"Compilation test STDERR: {test.stderr}")
+        
         cmd = ["sclang", startup_script]
         logger.info(f"Spawning sclang: {' '.join(cmd)}")
         
