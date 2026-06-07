@@ -17,19 +17,21 @@ RUN apt-get update && apt-get install -y \
 # Set the working directory
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY python/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir fastapi uvicorn python-multipart python-osc streamlit requests
-
-# Copy the entire project
-COPY . .
-
 # Environment setup
 ENV PYTHONUNBUFFERED=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV HOME=/root
 ENV BACKEND_PORT=8000
 ENV QT_QPA_PLATFORM=offscreen
+
+# Copy requirements and install Python dependencies
+COPY python/requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir fastapi uvicorn python-multipart python-osc streamlit requests
+
+# Copy the entire project
+COPY . .
 
 # Make entrypoint executable
 RUN chmod +x entrypoint.sh
