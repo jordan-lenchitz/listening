@@ -1,5 +1,5 @@
 Tables {
-    classvar <MIDItoFreq, <FreqToMIDI;
+    classvar <MIDItoFreq, <FreqToMIDI, <Sine1024, <Sine2048, <Sine4096, <Triangle1024, <Triangle2048, <Triangle4096, <Square1024, <Square2048, <Square4096, <Sawtooth1024, <Sawtooth2048, <Sawtooth4096, <ERBTable;
 
     *initClass {
     MIDItoFreq = [

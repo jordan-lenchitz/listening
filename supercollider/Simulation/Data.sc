@@ -1,4 +1,5 @@
 SimulationData {
+    classvar <SensorData;
     *initClass {
         SensorData = [
             880.00000,
