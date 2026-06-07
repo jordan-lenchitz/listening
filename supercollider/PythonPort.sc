@@ -142,7 +142,7 @@ SyntheticGenerator {
     // Play the generated audio
     play { |audio|
         {
-            var buf = Buffer.loadCollection(s, audio);
+            var buf = Buffer.loadCollection(Server.default, audio);
             PlayBuf.ar(1, buf, doneAction: 2);
         }.play;
     }

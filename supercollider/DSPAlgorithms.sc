@@ -138,14 +138,16 @@ YinEstimator {
         };
 
         // Step 4: Absolute thresholding
-        (tauMin..tauMax - 1).do { |tau|
-            if (cmndf[tau] < threshold) {
-                bestTau = tau;
-                break;
-            };
-            if (cmndf[tau] < minCmndf) {
-                minCmndf = cmndf[tau];
-                bestTau = tau;
+        block { |break|
+            (tauMin..tauMax - 1).do { |tau|
+                if (cmndf[tau] < threshold) {
+                    bestTau = tau;
+                    break.value;
+                };
+                if (cmndf[tau] < minCmndf) {
+                    minCmndf = cmndf[tau];
+                    bestTau = tau;
+                };
             };
         };
 

@@ -1,5 +1,5 @@
 ListeningTracker {
-    var <config, <multiF0, <affordanceField, <dualProcess, <asa, <percept;
+    var <config, <multiF0, <affordanceField, <dualProcess, <asa, <percept, <db, <logger;
     var <sampleRate, <frameSize;
 
     *new { |sr = 44100, fs = 2048|

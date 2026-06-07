@@ -41,14 +41,14 @@ DualProcessTracker {
             var sum = 0.0;
             var col = FloatArray.newClear(n);
             n.do { |i|
-                var val = (-(lg[i] - lg[j]).squared / (2 * sigmaLn.squared)).exp;
+                var val = ( (-( (lg[i] - lg[j]).squared )) / (2.0 * (sigmaLn.squared)) ).exp;
                 col[i] = val;
                 sum = sum + val;
             };
             if (sum > 0) {
-                n.do { |i| transitionMatrix[i][j] = col[i] / sum };
+                n.do { |i| transitionMatrix[i].put(j, col[i] / sum) };
             } {
-                transitionMatrix[j][j] = 1.0;
+                transitionMatrix[j].put(j, 1.0);
             };
         };
     }
@@ -60,7 +60,7 @@ DualProcessTracker {
             var shift = (n / m).round.asInteger;
             if (shift < n) {
                 (0..n - shift - 1).do { |i|
-                    combP[i] = combP[i] + (p[i + shift] / (m * m));
+                    combP[i] = combP[i] + (p[i + shift] / (m.asFloat.squared));
                 };
             };
         };
@@ -72,7 +72,7 @@ DualProcessTracker {
         var fp = FloatArray.newClear(n);
         var lg, mu, sigmaLn, sum;
         
-        if (f0.isNil or: { f0 <= 0 }) {
+        if (f0.isNil || { f0 <= 0 }) {
             ^FloatArray.fill(n, 1.0 / n);
         };
 
