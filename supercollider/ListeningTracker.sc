@@ -41,7 +41,7 @@ ListeningTracker {
         // Integrate ASA
         peaks.do { |p|
             var advice = JustIntonationAdvisor.new.getAdvice(p[0], p[0]); // Simplified
-            asa.afford("default", time, p[0], p[1], "SUNG");
+            asa.recordAffordance("default", time, p[0], p[1], "SUNG");
         };
 
         ^field;

@@ -12,7 +12,15 @@ s.waitForBoot({
     
     "SC_BOOT: SERVER ONLINE".postln;
     
-    tracker = ListeningTracker.new(44100, 2048);
+    try {
+        tracker = ListeningTracker.new(44100, 2048);
+        "SC_BOOT: TRACKER READY".postln;
+    } { |error|
+        "SC_BOOT: TRACKER ERROR".postln;
+        error.dump;
+        0.exit;
+    };
+    
     backendAddr = NetAddr("127.0.0.1", 57121);
     
     OSCdef(\process_audio, { |msg|
@@ -23,7 +31,8 @@ s.waitForBoot({
     
     "SC_BOOT: READY".postln;
 }, {
-    "SC_BOOT: ERROR".postln;
+    "SC_BOOT: SERVER ERROR".postln;
     0.exit;
 });
 )
+

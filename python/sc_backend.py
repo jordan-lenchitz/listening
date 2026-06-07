@@ -85,6 +85,10 @@ def start_sclang():
         v = subprocess.run(["sclang", "-v"], capture_output=True, text=True, env=os.environ.copy())
         logger.info(f"sclang version output: {v.stdout} {v.stderr}")
         
+        env = os.environ.copy()
+        env["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+        env["QT_QPA_PLATFORM"] = "minimal"
+        
         cmd = ["sclang", startup_script]
         logger.info(f"Spawning sclang: {' '.join(cmd)}")
         
@@ -94,7 +98,7 @@ def start_sclang():
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1, # Line buffered
-            env=os.environ.copy()
+            env=env
         )
         
         def log_output(stream, prefix):
@@ -122,10 +126,6 @@ async def startup_event():
             f.write(f"""
 includePaths:
   - /app/supercollider
-  - /app/supercollider/Utils
-  - /app/supercollider/Library
-  - /app/supercollider/Simulation
-  - /app/supercollider/Wrappers
 excludePaths: []
 postInlineWarnings: false
 """)
