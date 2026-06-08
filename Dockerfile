@@ -1,43 +1,26 @@
-# Use a Python base image with Debian Bookworm
-FROM python:3.12-slim-bookworm
+# use python 3.12 slim for a small image size
+FROM python:3.12-slim
 
-# Install SuperCollider and system dependencies
+# install system dependencies for audio processing
 RUN apt-get update && apt-get install -y \
-    supercollider-language \
-    supercollider-server \
-    supercollider-common \
-    libsndfile1 \
-    xvfb \
-    libqt5widgets5 \
-    libqt5gui5 \
-    libqt5core5a \
     build-essential \
+    libsndfile1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory
+# set the working directory
 WORKDIR /app
 
-# Environment setup
-ENV PYTHONUNBUFFERED=1
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-ENV HOME=/root
-ENV BACKEND_PORT=8000
-ENV QT_QPA_PLATFORM=offscreen
-
-# Copy requirements and install Python dependencies
+# copy requirements and install
 COPY python/requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir fastapi uvicorn python-multipart python-osc streamlit requests
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire project
-COPY . .
+# copy the app code
+COPY python/streamlit_app.py .
+COPY python/affordance_field.py .
 
-# Make entrypoint executable
-RUN chmod +x entrypoint.sh
-
-# Expose the Cloud Run port
+# expose streamlit port
 EXPOSE 8080
 
-# Start command
-CMD ["./entrypoint.sh"]
+# run streamlit
+CMD ["streamlit", "run", "streamlit_app.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.enableCORS=false", "--server.enableXsrfProtection=false", "--server.headless=true", "--server.enableWebsocketCompression=false", "--browser.gatherUsageStats=false"]
