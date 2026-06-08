@@ -1,6 +1,0 @@
-TITLE:: SchemaDefinitions
-summary:: Data structures for auditory schemas.
-categories:: Analysis, Data
-
-DESCRIPTION::
-SchemaDefinitions provides a formal language for describing "auditory schemas" (prototypical sound patterns). These schemas are used by the AuditorySceneAnalysis engine to perform top-down grouping.

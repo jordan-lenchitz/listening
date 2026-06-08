@@ -1,6 +1,0 @@
-TITLE:: PythonPort
-summary:: Interface for Python-based analysis and visualization.
-categories:: External, Bridge
-
-DESCRIPTION::
-PythonPort enables communication between SuperCollider and the Python ecosystem. It is primarily used for deep learning-based pitch estimation (e.g., using Torch-based models) and interactive visualization with Streamlit.
