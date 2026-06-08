@@ -8,6 +8,8 @@ from affordance_field import AffordanceField
 import tempfile
 import os
 import time
+from pydub import AudioSegment
+import io
 
 st.set_page_config(page_title="listening dissertation demo", layout="wide")
 
@@ -22,6 +24,24 @@ def get_audio_duration(file_bytes, file_name):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
     return duration
+
+@st.cache_data
+def get_chunk_audio(file_bytes, file_name, offset, duration):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as tmp_file:
+        tmp_file.write(file_bytes)
+        tmp_path = tmp_file.name
+    try:
+        audio = AudioSegment.from_file(tmp_path)
+        start_ms = offset * 1000
+        end_ms = (offset + duration) * 1000
+        chunk = audio[start_ms:end_ms]
+        
+        buffer = io.BytesIO()
+        chunk.export(buffer, format="mp3")
+        return buffer.getvalue()
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
     duration_total = get_audio_duration(file_bytes, file_name)
@@ -146,7 +166,7 @@ if uploaded_file is not None:
                 res["Tx_mag"], 
                 aspect='auto', 
                 origin='lower', 
-                cmap='magma', 
+                cmap='inferno', 
                 extent=[res["offset"], res["offset"] + res["duration"], 0, sr/2]
             )
             ax_ssq.set_ylim([0, 8000])
@@ -174,7 +194,12 @@ if uploaded_file is not None:
         plt.close(fig_af)
 
         # audio player
-        st.audio(file_bytes, format=f"audio/{os.path.splitext(uploaded_file.name)[1][1:]}")
+        st.subheader(f"audio playback - chunk {chunk_idx+1}")
+        chunk_audio = get_chunk_audio(file_bytes, uploaded_file.name, res["offset"], res["duration"])
+        st.audio(chunk_audio, format="audio/mp3")
+        
+        with st.expander("full audio"):
+            st.audio(file_bytes, format=f"audio/{os.path.splitext(uploaded_file.name)[1][1:]}")
 
     except Exception as e:
         st.error(f"error: {str(e)}")

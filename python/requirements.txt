@@ -5,3 +5,4 @@ matplotlib>=3.7
 ssqueezepy==0.6.6
 streamlit
 tqdm
+pydub
