@@ -43,6 +43,7 @@ def get_chunk_audio(file_bytes, file_name, offset, duration):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+@st.cache_data(show_spinner=False)
 def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
     duration_total = get_audio_duration(file_bytes, file_name)
     n_chunks = int(np.ceil(duration_total / chunk_size))
@@ -50,13 +51,23 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
     sr = 22050
     n_fft = 2048
     hop_length = 512
+    total_frames = int(duration_total * sr)
     
     af = AffordanceField(sample_rate=sr, frame_length=n_fft, hop_length=hop_length)
     
     all_results = []
     
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    # Progress container for the first-time run
+    progress_container = st.container()
+    with progress_container:
+        st.write(f"### analyzing {duration_total:.2f}s of audio")
+        st.write(f"- total audio frames: {total_frames:,}")
+        st.write(f"- total chunks: {n_chunks} ({chunk_size}s each)")
+        st.write("- engine: stft + synchrosqueezing (ssq) + affordance field")
+        st.info("ssq is computationally intensive (reassigning stft coefficients) - this will take a moment per chunk.")
+        
+        progress_bar = st.progress(0.0)
+        status_text = st.empty()
     
     # We'll save the file once to avoid repeated writes
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as tmp_file:
@@ -66,7 +77,10 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
     try:
         for i in range(n_chunks):
             offset = i * chunk_size
-            status_text.text(f"processing chunk {i+1}/{n_chunks} ({offset:.1f}s - {min(offset+chunk_size, duration_total):.1f}s)")
+            current_chunk_size = min(chunk_size, duration_total - offset)
+            chunk_frames = int(current_chunk_size * sr)
+            
+            status_text.text(f"chunk {i+1}/{n_chunks} | frames: {chunk_frames:,} | range: {offset:.1f}s - {offset+current_chunk_size:.1f}s")
             
             # Load chunk
             y_chunk, _ = librosa.load(tmp_path, sr=sr, offset=offset, duration=chunk_size)
@@ -79,7 +93,7 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
             mag = np.abs(stft)
             S_db = librosa.amplitude_to_db(mag, ref=np.max).astype(np.float32)
             
-            # SSQ (CPU intensive, so we definitely want this chunked)
+            # SSQ
             Tx, _, _, _ = ssqueezepy.ssq_stft(y_chunk, n_fft=n_fft, hop_len=hop_length)
             Tx_mag = np.abs(Tx).astype(np.float32)
             
@@ -97,6 +111,11 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
             })
             
             progress_bar.progress((i + 1) / n_chunks)
+        
+        status_text.text("analysis complete.")
+        # Clear progress bar after a short delay if it was just run
+        time.sleep(1)
+        progress_container.empty()
             
     finally:
         if os.path.exists(tmp_path):
