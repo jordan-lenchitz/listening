@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -15,41 +12,12 @@ import (
 	"time"
 
 	"github.com/go-audio/wav"
+	"github.com/jordan-lenchitz/listening/go/pkg/dsp"
+	"github.com/jordan-lenchitz/listening/go/pkg/tracking"
 )
-
-type stftRequest struct {
-	Audio       []float64 `json:"audio"`
-	FrameLength int       `json:"frame_length"`
-	HopLength   int       `json:"hop_length"`
-}
-
-type stftResponse struct {
-	Coefficients [][]complexData `json:"coefficients"`
-}
-
-type trackRequest struct {
-	Coefficients [][]complexData `json:"coefficients"`
-	SampleRate   int             `json:"sample_rate"`
-	HopLength    int             `json:"hop_length"`
-	FrameLength  int             `json:"frame_length"`
-}
-
-type vizRequest struct {
-	Tracks     any       `json:"tracks"`
-	Times      []float64 `json:"times"`
-	SampleRate int       `json:"sample_rate"`
-	HopLength  int       `json:"hop_length"`
-	Title      string    `json:"title"`
-}
-
-type complexData struct {
-	Real float64 `json:"real"`
-	Imag float64 `json:"imag"`
-}
 
 type orchestrator struct {
 	logger *slog.Logger
-	client *http.Client
 }
 
 func (o *orchestrator) routes() http.Handler {
@@ -87,78 +55,79 @@ func (o *orchestrator) handleProcess(w http.ResponseWriter, r *http.Request) {
 
 	sr, fl, hl := int(dec.SampleRate), 4096, 512
 
-	stftResp, err := o.callDSP(r.Context(), samples, fl, hl)
-	if err != nil {
-		o.error(w, "dsp failure", err)
+	// 1. DSP (STFT)
+	stft := dsp.NewSTFT(fl, hl)
+	coeffs := stft.Compute(samples)
+
+	if len(coeffs) == 0 {
+		http.Error(w, "audio too short", http.StatusBadRequest)
 		return
 	}
 
-	tracks, err := o.callTracking(r.Context(), stftResp.Coefficients, sr, fl, hl)
-	if err != nil {
-		o.error(w, "tracking failure", err)
-		return
+	// 2. Tracking
+	conf := tracking.DefaultTrackerConfig()
+	conf.SampleRate = sr
+	conf.HopLength = hl
+	conf.FrameLength = fl
+
+	tracker := tracking.NewMultiF0Tracker(&conf)
+	af := tracking.NewAffordanceField(float64(sr), fl)
+	dt := tracking.NewDualProcessTracker(conf.MinFreq, conf.MaxFreq, 60)
+
+	freqs := make([]float64, fl/2+1)
+	for i := range freqs {
+		freqs[i] = float64(i) * float64(sr) / float64(fl)
 	}
 
-	times := make([]float64, len(stftResp.Coefficients))
+	for _, frame := range coeffs {
+		mag := make([]float64, len(frame))
+		for i, c := range frame {
+			mag[i] = math.Sqrt(real(c)*real(c) + imag(c)*imag(c))
+		}
+
+		field := af.Update(mag)
+		cands, salience := tracker.ComputeSalience(mag, freqs, field)
+		salience = dt.HarmonicCombWeight(salience)
+		peaks := tracker.DetectPeaks(cands, salience)
+		tracker.Update(peaks, dt.TransitionMatrix, dt.FreqGrid)
+	}
+
+	// 3. Visualize
+	times := make([]float64, len(coeffs))
 	for i := range times {
 		times[i] = float64(i*hl) / float64(sr)
 	}
 
-	viz, err := o.callVisualizer(r.Context(), tracks, times, sr, hl)
-	if err != nil {
-		o.error(w, "viz failure", err)
+	result := &tracking.TrackingResult{
+		Times:      times,
+		SungVoices: tracker.Tracks,
+		SampleRate: sr,
+		HopLength:  hl,
+	}
+
+	tmpFile := "temp_result.png"
+	if err := result.Visualize(tmpFile, "Monolith Result"); err != nil {
+		o.logger.Error("visualize failed", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	defer viz.Close()
+	defer os.Remove(tmpFile)
+
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		o.logger.Error("read png failed", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "image/png")
-	io.Copy(w, viz)
-}
-
-func (o *orchestrator) callDSP(ctx context.Context, audio []float64, fl, hl int) (*stftResponse, error) {
-	data, _ := json.Marshal(stftRequest{Audio: audio, FrameLength: fl, HopLength: hl})
-	req, _ := http.NewRequestWithContext(ctx, "POST", "http://localhost:8081/stft", bytes.NewReader(data))
-	resp, err := o.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var res stftResponse
-	return &res, json.NewDecoder(resp.Body).Decode(&res)
-}
-
-func (o *orchestrator) callTracking(ctx context.Context, coeffs [][]complexData, sr, fl, hl int) (any, error) {
-	data, _ := json.Marshal(trackRequest{Coefficients: coeffs, SampleRate: sr, FrameLength: fl, HopLength: hl})
-	req, _ := http.NewRequestWithContext(ctx, "POST", "http://localhost:8082/track", bytes.NewReader(data))
-	resp, err := o.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var res any
-	return res, json.NewDecoder(resp.Body).Decode(&res)
-}
-
-func (o *orchestrator) callVisualizer(ctx context.Context, tracks any, times []float64, sr, hl int) (io.ReadCloser, error) {
-	data, _ := json.Marshal(vizRequest{Tracks: tracks, Times: times, SampleRate: sr, HopLength: hl, Title: "Microservices Result"})
-	req, _ := http.NewRequestWithContext(ctx, "POST", "http://localhost:8083/visualize", bytes.NewReader(data))
-	resp, err := o.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	return resp.Body, nil
-}
-
-func (o *orchestrator) error(w http.ResponseWriter, msg string, err error) {
-	o.logger.Error(msg, "error", err)
-	http.Error(w, msg, http.StatusBadGateway)
+	w.Write(data)
 }
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	orch := &orchestrator{
 		logger: log,
-		client: &http.Client{Timeout: 60 * time.Second},
 	}
 
 	srv := &http.Server{
@@ -167,7 +136,7 @@ func main() {
 	}
 
 	go func() {
-		log.Info("orchestrator live", "port", 8080)
+		log.Info("monolith backend live", "port", 8080)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("fatal", "error", err)
 			os.Exit(1)

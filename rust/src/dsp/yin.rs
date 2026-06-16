@@ -70,7 +70,22 @@ impl Yin {
         // 2. Compute energy terms
         let mut energy = vec![0.0; tau_max + 1];
         let mut current_energy = 0.0;
-        for i in 0..self.frame_size {
+        use std::simd::f64x4;
+        use std::simd::num::SimdFloat;
+        
+        let chunks = self.frame_size / 4;
+        for i in 0..chunks {
+            let idx = i * 4;
+            let v = f64x4::from_array([
+                frame[idx] as f64, 
+                frame[idx+1] as f64, 
+                frame[idx+2] as f64, 
+                frame[idx+3] as f64
+            ]);
+            let sq = v * v;
+            current_energy += sq.reduce_sum();
+        }
+        for i in chunks*4..self.frame_size {
             current_energy += (frame[i] * frame[i]) as f64;
         }
         energy[0] = current_energy;

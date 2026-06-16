@@ -36,8 +36,10 @@ func handleCalculate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, strings.ToLower(err.Error()), http.StatusBadRequest)
 		return
 	}
-	ji := music.NewJustIntonation(req.BaseFreq)
-	target, diff := ji.CalculateRatio(req.RatioNum, req.RatioDen)
+	ji := music.JustIntonation{}
+	target := ji.Chord(req.BaseFreq, [][2]int{{req.RatioNum, req.RatioDen}})[0]
+	// If diff is meant to be difference from equal temperament, use CentsFromEqualTempered
+	diff := ji.CentsFromEqualTempered([]float64{target}, 440.0)[0]
 	resp := JIResponse{
 		TargetFreq: target,
 		CentsDiff:  diff,
