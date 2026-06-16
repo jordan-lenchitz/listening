@@ -112,12 +112,13 @@ class DualProcessPitchTracker:
         # We'll use a simple ridge extraction for now or look for more sophisticated one.
         ridges = extract_ridges(Tx, ssq_freqs, penalty=5, n_ridges=3)
         
-        # ridges is (n_ridges, n_samples)
+        # ridges is actually (n_samples, n_ridges)
         # Map to our time_axis
         t_ssq = np.arange(len(self.audio)) / self.sr
         ridge_f = np.zeros((3, len(self.time_axis)))
-        for i in range(min(3, ridges.shape[0])):
-            f_interp = interp1d(t_ssq, ridges[i], kind='linear', fill_value='extrapolate')
+        for i in range(min(3, ridges.shape[1] if len(ridges.shape) > 1 else 1)):
+            ridge_data = ridges[:, i] if len(ridges.shape) > 1 else ridges
+            f_interp = interp1d(t_ssq, ridge_data, kind='linear', fill_value='extrapolate')
             ridge_f[i, :] = f_interp(self.time_axis)
             
         self.synsq_data = {
