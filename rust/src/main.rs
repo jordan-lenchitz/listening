@@ -1,9 +1,7 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use listening_tracker::dsp::yin::Yin;
 use listening_tracker::tracking::BayesianTracker;
-use listening_tracker::tracking::MultiF0Tracker;
-use listening_tracker::tracking::affordance::AffordanceField;
-use listening_tracker::tracking::track::VoiceState;
+
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::env;
 
