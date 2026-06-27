@@ -207,8 +207,34 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
 
 st.markdown("# [listening](https://github.com/jordan-lenchitz/listening) - spectral affordance analysis (chunked)")
 
+@st.cache_data(show_spinner="Downloading example from GCS...")
+def download_example_from_gcs(example_filename):
+    from google.cloud import storage
+    client = storage.Client()
+    bucket = client.bucket("jordanlenchitz-net-assets")
+    blob = bucket.blob(f"listening-examples/{example_filename}")
+    return blob.download_as_bytes()
+
+# example selector
+example_options = ["None", "tim waurick (example_one.mp3)", "benedetti_1585.mp3", "jesu.mp3"]
+selected_example = st.selectbox("or choose an example:", example_options)
+
 # file uploader
 uploaded_file = st.file_uploader("upload audio (mp3, wav, flac)", type=["mp3", "wav", "m4a", "flac"])
+
+if selected_example != "None" and uploaded_file is None:
+    example_filename = "example_one.mp3" if "tim waurick" in selected_example else selected_example
+    try:
+        file_data = download_example_from_gcs(example_filename)
+        class FakeUploadedFile:
+            def __init__(self, name, data):
+                self.name = name
+                self.data = data
+            def getvalue(self):
+                return self.data
+        uploaded_file = FakeUploadedFile(example_filename, file_data)
+    except Exception as e:
+        st.error(f"failed to download {example_filename} from GCS: {e}")
 
 # sidebar
 st.sidebar.header("analysis settings")
