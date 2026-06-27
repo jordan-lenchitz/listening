@@ -6,3 +6,4 @@ ssqueezepy==0.6.6
 streamlit
 tqdm
 pydub
+google-cloud-storage
