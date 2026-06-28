@@ -29,7 +29,9 @@ class DualProcessPitchTracker:
         kl_alert_thresh: float = 0.5,
         use_synsq: bool = True,
         beta_synsq: float = 0.3,
-        ssq_voices_per_octave: int = 48
+        ssq_voices_per_octave: int = 48,
+        offset: float = 0.0,
+        duration: Optional[float] = None
     ):
         self.audio_file = audio_file
         self.frame_duration = frame_duration
@@ -47,14 +49,16 @@ class DualProcessPitchTracker:
         self.use_synsq = use_synsq
         self.beta_synsq = beta_synsq
         self.ssq_voices_per_octave = ssq_voices_per_octave
+        self.offset = offset
+        self.duration = duration
 
         # Internal state
-        self.audio, self.sr = librosa.load(audio_file, sr=None, mono=True)
+        self.audio, self.sr = librosa.load(audio_file, sr=None, mono=True, offset=offset, duration=duration)
         self.frame_len = int(round(self.frame_duration * self.sr))
         self.frame_step = int(round(self.frame_shift * self.sr))
         
         n_frames = int(np.floor((len(self.audio) - self.frame_len) / self.frame_step)) + 1
-        self.time_axis = (np.arange(n_frames) * self.frame_shift) + self.frame_duration / 2.0
+        self.time_axis = self.offset + (np.arange(n_frames) * self.frame_shift) + self.frame_duration / 2.0
         
         self._calc_freq_grid()
         self._build_gabor_bank()
@@ -114,7 +118,7 @@ class DualProcessPitchTracker:
         
         # ridges is actually (n_samples, n_ridges)
         # Map to our time_axis
-        t_ssq = np.arange(len(self.audio)) / self.sr
+        t_ssq = self.offset + np.arange(len(self.audio)) / self.sr
         ridge_f = np.zeros((3, len(self.time_axis)))
         for i in range(min(3, ridges.shape[1] if len(ridges.shape) > 1 else 1)):
             ridge_data = ridges[:, i] if len(ridges.shape) > 1 else ridges
