@@ -14,7 +14,7 @@ import base64
 import json
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="listening dissertation demo", layout="wide")
+st.set_page_config(page_title="listening dissertation demo", layout="wide", initial_sidebar_state="collapsed")
 
 @st.cache_data
 def get_audio_duration(file_bytes, file_name):
@@ -65,7 +65,7 @@ def generate_base64_plots(results, sr, cmap_option):
         duration = res["duration"]
         
         # 1. Spectrogram
-        fig_spec, ax_spec = plt.subplots(figsize=(8, 4.5), facecolor='none')
+        fig_spec, ax_spec = plt.subplots(figsize=(8, 3), facecolor='none')
         ax_spec.set_facecolor('none')
         img = ax_spec.imshow(
             res["S_db"], 
@@ -82,7 +82,7 @@ def generate_base64_plots(results, sr, cmap_option):
         spec_img = render_plot_to_base64(fig_spec)
         
         # 2. SSQ
-        fig_ssq, ax_ssq = plt.subplots(figsize=(8, 4.5), facecolor='none')
+        fig_ssq, ax_ssq = plt.subplots(figsize=(8, 3), facecolor='none')
         ax_ssq.set_facecolor('none')
         img_ssq = ax_ssq.imshow(
             res["Tx_mag"], 
@@ -98,7 +98,7 @@ def generate_base64_plots(results, sr, cmap_option):
         ssq_img = render_plot_to_base64(fig_ssq)
         
         # 3. Affordance Field
-        fig_af, ax_af = plt.subplots(figsize=(15, 6), facecolor='none')
+        fig_af, ax_af = plt.subplots(figsize=(15, 4), facecolor='none')
         ax_af.set_facecolor('none')
         im_af = ax_af.imshow(
             res["field"], 
@@ -217,10 +217,10 @@ def download_example_from_gcs(example_filename):
 
 # example selector
 example_options = ["None", "tim waurick (example_one.mp3)", "benedetti_1585.mp3", "jesu.mp3"]
-selected_example = st.selectbox("or choose an example:", example_options)
+selected_example = st.selectbox("feel free to choose an example", example_options)
 
 # file uploader
-uploaded_file = st.file_uploader("upload audio (mp3, wav, flac)", type=["mp3", "wav", "m4a", "flac"])
+uploaded_file = st.file_uploader("you are welcome to upload audio (mp3, wav, flac)", type=["mp3", "wav", "m4a", "flac"])
 
 if selected_example != "None" and uploaded_file is None:
     example_filename = "example_one.mp3" if "tim waurick" in selected_example else selected_example
@@ -624,11 +624,11 @@ if uploaded_file is not None:
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 330px;
+            height: 250px;
         }
 
         .plot-card.full-width .plot-image-container {
-            height: 420px;
+            height: 320px;
         }
 
         .plot-image {

@@ -3,7 +3,21 @@ import tempfile
 import os
 import uvicorn
 import shutil
+import concurrent.futures
+import librosa
+import numpy as np
+import math
 from dual_process_tracker import DualProcessPitchTracker
+
+def process_chunk(file_path: str, offset: float, duration: float):
+    tracker = DualProcessPitchTracker(
+        audio_file=file_path,
+        use_synsq=True,
+        offset=offset,
+        duration=duration
+    )
+    tracker.run()
+    return getattr(tracker, "tracks", []), tracker.time_axis.tolist()
 
 app = FastAPI(title="Affordance Tracker API", version="1.0.0")
 
@@ -21,23 +35,31 @@ async def analyze_audio(file: UploadFile = File(...)):
         tmp_path = tmp_file.name
 
     try:
-        # Run the tracking with default (just better) parameters
-        tracker = DualProcessPitchTracker(
-            audio_file=tmp_path,
-            use_synsq=True
-        )
-        tracker.run()
+        chunk_duration = 10.0
+        total_duration = librosa.get_duration(path=tmp_path)
+        chunks = [(tmp_path, i, min(chunk_duration, total_duration - i)) for i in np.arange(0, total_duration, chunk_duration)]
+        
+        all_tracks = []
+        full_time_axis = []
+        
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            results = list(executor.map(process_chunk, *zip(*chunks)))
+            
+        for chunk_tracks, chunk_time_axis in results:
+            all_tracks.extend(chunk_tracks)
+            full_time_axis.extend(chunk_time_axis)
         
         # Format trajectories into a super clean JSON
         trajectories = []
-        for track in getattr(tracker, "tracks", []):
+        for track in all_tracks:
             trajectories.append({
                 "times": [float(t) for t in track.get("time", [])],
-                "frequencies": [float(f) if not __import__('math').isnan(f) else None for f in track.get("f0", [])]
+                "frequencies": [float(f) if not math.isnan(f) else None for f in track.get("f0", [])]
             })
+            
         return {
             "status": "success",
-            "time_axis": tracker.time_axis.tolist(),
+            "time_axis": full_time_axis,
             "trajectories": trajectories
         }
     except Exception as e:
