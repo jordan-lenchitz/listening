@@ -81,7 +81,6 @@ class AffordanceField:
         
         # 2. Harmonic masks for H
         self.harmonic_mask = np.zeros((len(self.harmonic_check_ratios), self.n_freq, self.n_freq), dtype=bool)
-        self.subharmonic_mask = np.zeros((len(self.harmonic_check_ratios), self.n_freq, self.n_freq), dtype=bool)
         tolerance_ratio = 2 ** (self.harmonic_tolerance_cents / 1200.0)
         
         for r_idx, ratio in enumerate(self.harmonic_check_ratios):
@@ -91,12 +90,6 @@ class AffordanceField:
                 lower_up = target_up / tolerance_ratio
                 upper_up = target_up * tolerance_ratio
                 self.harmonic_mask[r_idx, f, :] = (self.freqs_hz >= lower_up) & (self.freqs_hz <= upper_up)
-                
-                # Look down (for subharmonic penalty)
-                target_down = self.freqs_hz[f] / ratio
-                lower_down = target_down / tolerance_ratio
-                upper_down = target_down * tolerance_ratio
-                self.subharmonic_mask[r_idx, f, :] = (self.freqs_hz >= lower_down) & (self.freqs_hz <= upper_down)
                 
         # ERB bins for continuity
         self.erb_per_bin = np.mean(np.diff(self.freqs_erb)) if self.n_freq > 1 else 1.0
@@ -179,22 +172,6 @@ class AffordanceField:
             H += harmonic_support_ratio * valid_f0
             
         H = H / len(self.harmonic_check_ratios)
-        
-        # Subharmonic penalty: if 'f' has a subharmonic that is strongly present, 
-        # it is likely just an intermediate overtone, not a fundamental. 
-        # We penalize its H score to avoid the "subharmonic bonus".
-        subharmonic_penalty = np.ones_like(H)
-        for r_idx in range(len(self.harmonic_check_ratios)):
-            mask = self.subharmonic_mask[r_idx]
-            for f in range(self.n_freq):
-                m = mask[f]
-                if np.any(m):
-                    sub_power = np.max(power_dB[m, :], axis=0)
-                    # If the subharmonic is within threshold of the overtone (or louder)
-                    is_subharmonic = sub_power >= power_dB[f, :] - self.harmonic_amplitude_threshold_db
-                    subharmonic_penalty[f, :] = np.where(is_subharmonic, 0.0, subharmonic_penalty[f, :])
-                    
-        H = H * subharmonic_penalty
         
         # 4. Affordance Integration
         A_raw = (self.weight_presence * E + 
