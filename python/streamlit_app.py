@@ -1,9 +1,9 @@
 import streamlit as st
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
-import ssqueezepy
 from affordance_field import AffordanceField
 import tempfile
 import os
@@ -81,24 +81,8 @@ def generate_base64_plots(results, sr, cmap_option):
         fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db")
         spec_img = render_plot_to_base64(fig_spec)
         
-        # 2. SSQ
-        fig_ssq, ax_ssq = plt.subplots(figsize=(8, 3), facecolor='none')
-        ax_ssq.set_facecolor('none')
-        img_ssq = ax_ssq.imshow(
-            res["Tx_mag"], 
-            aspect='auto', 
-            origin='lower', 
-            cmap='inferno', 
-            extent=[offset, offset + duration, 0, sr/2]
-        )
-        ax_ssq.set_ylim([0, 8000])
-        ax_ssq.set_xlabel("time (s)")
-        ax_ssq.set_ylabel("freq (hz)")
-        fig_ssq.colorbar(img_ssq, ax=ax_ssq)
-        ssq_img = render_plot_to_base64(fig_ssq)
-        
-        # 3. Affordance Field
-        fig_af, ax_af = plt.subplots(figsize=(15, 4), facecolor='none')
+        # 2. Affordance Field A(t, f)
+        fig_af, ax_af = plt.subplots(figsize=(8, 3), facecolor='none')
         ax_af.set_facecolor('none')
         im_af = ax_af.imshow(
             res["field"], 
@@ -108,25 +92,63 @@ def generate_base64_plots(results, sr, cmap_option):
             extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
         )
         ax_af.set_ylim([60, 4000])
-        ax_af.set_title(f"spectral affordance field - chunk {idx+1}")
         ax_af.set_xlabel("time (s)")
         ax_af.set_ylabel("freq (hz)")
         fig_af.colorbar(im_af, ax=ax_af)
         af_img = render_plot_to_base64(fig_af)
+        
+        # 3. Features Breakdown
+        fig_feat, axes = plt.subplots(3, 2, figsize=(15, 8), facecolor='none')
+        fig_feat.patch.set_facecolor('none')
+        plt.subplots_adjust(hspace=0.4, wspace=0.2)
+        
+        def plot_feat(ax, data, title, is_hot=True):
+            im = ax.imshow(
+                data, aspect='auto', origin='lower',
+                cmap='hot' if is_hot else cmap_option,
+                extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
+            )
+            ax.set_ylim([60, 4000])
+            ax.set_title(title)
+            fig_feat.colorbar(im, ax=ax)
+            
+        plot_feat(axes[0, 0], res["presence"], "[E] Presence")
+        plot_feat(axes[0, 1], res["persistence"], "[P] Persistence")
+        plot_feat(axes[1, 0], res["continuity"], "[C] Continuity")
+        plot_feat(axes[1, 1], res["change"], "[D] Change")
+        plot_feat(axes[2, 0], res["coherence"], "[H] Harmonic Coherence")
+        
+        # Mid-frame profile
+        ax_prof = axes[2, 1]
+        mid_idx = res["presence"].shape[1] // 2
+        f_mask = res["freqs"] <= 4000
+        ax_prof.plot(res["freqs"][f_mask], res["presence"][f_mask, mid_idx], 'b-', lw=1, label='E')
+        ax_prof.plot(res["freqs"][f_mask], res["persistence"][f_mask, mid_idx], 'g-', lw=1, label='P')
+        ax_prof.plot(res["freqs"][f_mask], res["continuity"][f_mask, mid_idx], 'm-', lw=1, label='C')
+        ax_prof.plot(res["freqs"][f_mask], res["change"][f_mask, mid_idx], 'r-', lw=1, label='D')
+        ax_prof.plot(res["freqs"][f_mask], res["coherence"][f_mask, mid_idx], 'c-', lw=1, label='H')
+        ax_prof.plot(res["freqs"][f_mask], res["field"][f_mask, mid_idx], 'w-', lw=2, label='A')
+        ax_prof.set_xlim([800, 4000])
+        ax_prof.set_ylim([0, 1.1])
+        ax_prof.legend(loc='upper right', fontsize=8)
+        ax_prof.set_title(f"Profiles at t={res['times'][mid_idx]:.2f}s")
+        ax_prof.set_xlabel("Frequency (Hz)")
+        
+        feat_img = render_plot_to_base64(fig_feat)
         
         rendered_chunks.append({
             "idx": idx,
             "offset": offset,
             "duration": duration,
             "spec_img": spec_img,
-            "ssq_img": ssq_img,
-            "af_img": af_img
+            "af_img": af_img,
+            "feat_img": feat_img
         })
         
     return rendered_chunks
 
 @st.cache_data(show_spinner=False)
-def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
+def process_audio_chunked(file_bytes, file_name, chunk_size=10.0, **af_kwargs):
     duration_total = get_audio_duration(file_bytes, file_name)
     n_chunks = int(np.ceil(duration_total / chunk_size))
     
@@ -135,7 +157,7 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
     hop_length = 512
     total_frames = int(duration_total * sr)
     
-    af = AffordanceField(sample_rate=sr, frame_length=n_fft, hop_length=hop_length)
+    af = AffordanceField(sr=sr, n_fft=n_fft, **af_kwargs)
     
     all_results = []
     
@@ -145,8 +167,7 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
         st.write(f"### analyzing {duration_total:.2f}s of audio")
         st.write(f"- total audio frames: {total_frames:,}")
         st.write(f"- total chunks: {n_chunks} ({chunk_size}s each)")
-        st.write("- engine: stft + synchrosqueezing (ssq) + affordance field")
-        st.info("ssq is reassigning coefficients from the stft which takes a lot of electrons sorry")
+        st.write("- engine: stft + affordance field")
         
         progress_bar = st.progress(0.0)
         status_text = st.empty()
@@ -156,46 +177,52 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0):
         tmp_file.write(file_bytes)
         tmp_path = tmp_file.name
 
+    def process_single_chunk(i):
+        offset = i * chunk_size
+        current_chunk_size = min(chunk_size, duration_total - offset)
+        
+        y_chunk, _ = librosa.load(tmp_path, sr=sr, offset=offset, duration=chunk_size)
+        
+        if len(y_chunk) < n_fft:
+            return None
+            
+        stft = librosa.stft(y_chunk, n_fft=n_fft, hop_length=hop_length, dtype=np.complex64)
+        mag = np.abs(stft)
+        S_db = librosa.amplitude_to_db(mag, ref=np.max).astype(np.float32)
+        
+        af_results = af.compute(y_chunk, sr)
+        
+        return {
+            "offset": offset,
+            "duration": len(y_chunk) / sr,
+            "S_db": S_db,
+            "field": af_results["field"],
+            "times": af_results["times"] + offset,
+            "freqs": af_results["frequencies"],
+            "presence": af_results["presence"],
+            "persistence": af_results["persistence"],
+            "continuity": af_results["continuity"],
+            "change": af_results["change"],
+            "coherence": af_results["coherence"],
+        }
+
     try:
-        for i in range(n_chunks):
-            offset = i * chunk_size
-            current_chunk_size = min(chunk_size, duration_total - offset)
-            chunk_frames = int(current_chunk_size * sr)
-            
-            status_text.text(f"chunk {i+1}/{n_chunks} | frames: {chunk_frames:,} | range: {offset:.1f}s - {offset+current_chunk_size:.1f}s")
-            
-            # Load chunk
-            y_chunk, _ = librosa.load(tmp_path, sr=sr, offset=offset, duration=chunk_size)
-            
-            if len(y_chunk) < n_fft:
-                continue
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(process_single_chunk, i) for i in range(n_chunks)]
+            for i, future in enumerate(futures):
+                res = future.result()
+                if res is not None:
+                    all_results.append(res)
                 
-            # STFT
-            stft = librosa.stft(y_chunk, n_fft=n_fft, hop_length=hop_length, dtype=np.complex64)
-            mag = np.abs(stft)
-            S_db = librosa.amplitude_to_db(mag, ref=np.max).astype(np.float32)
-            
-            # SSQ
-            Tx, _, _, _ = ssqueezepy.ssq_stft(y_chunk, n_fft=n_fft, hop_len=hop_length)
-            Tx_mag = np.abs(Tx).astype(np.float32)
-            
-            # Affordance Field
-            af_results = af.compute(y_chunk, stft=stft)
-            
-            all_results.append({
-                "offset": offset,
-                "duration": len(y_chunk) / sr,
-                "S_db": S_db,
-                "Tx_mag": Tx_mag,
-                "field": af_results["field"],
-                "times": af_results["times"] + offset,
-                "freqs": af_results["frequencies"]
-            })
-            
-            progress_bar.progress((i + 1) / n_chunks)
+                # Streamlit UI updates inside main thread loop
+                status_text.text(f"processed chunk {i+1}/{n_chunks}")
+                progress_bar.progress((i + 1) / n_chunks)
+        
+        # Sort results by offset to maintain correct chunk order in case futures completed out of order
+        # (Though we are iterating over futures array in order, so it is naturally ordered. But sorting is safe.)
+        all_results.sort(key=lambda x: x["offset"])
         
         status_text.text("analysis complete.")
-        # Clear progress bar after a short delay if it was just run
         time.sleep(1)
         progress_container.empty()
             
@@ -255,6 +282,45 @@ if uploaded_file is not None:
         pass
 
 chunk_size = st.sidebar.slider("chunk size (seconds)", min_chunk, max_chunk, default_chunk)
+
+st.sidebar.subheader("affordance parameters")
+with st.sidebar.expander("feature weights"):
+    w_pres = st.slider("presence weight", 0.0, 2.0, 0.8, 0.1)
+    w_pers = st.slider("persistence weight", 0.0, 2.0, 0.5, 0.1)
+    w_cont = st.slider("continuity weight", 0.0, 2.0, 0.5, 0.1)
+    w_chg = st.slider("change weight", 0.0, 2.0, 1.0, 0.1)
+    w_harm = st.slider("harmonic weight", 0.0, 2.0, 1.0, 0.1)
+
+with st.sidebar.expander("time constants (ms)"):
+    pers_half = st.slider("persistence halflife", 10.0, 200.0, 50.0, 5.0)
+    smooth_half = st.slider("smoothing halflife", 10.0, 100.0, 30.0, 5.0)
+
+with st.sidebar.expander("other params"):
+    cont_erb = st.slider("continuity neighborhood (ERB)", 0.1, 2.0, 0.3, 0.1)
+    on_w = st.slider("onset weight", 0.0, 1.0, 0.65, 0.05)
+    off_w = st.slider("offset weight", 0.0, 1.0, 0.35, 0.05)
+
+with st.sidebar.expander("peripheral & masking"):
+    mask_rad = st.slider("masking radius (ERB)", 0.5, 5.0, 2.5, 0.1)
+    mask_thresh = st.slider("masking threshold (dB)", 0.0, 20.0, 8.0, 1.0)
+    floor_hz = st.slider("harmonic floor (Hz)", 50.0, 1000.0, 100.0, 50.0)
+    
+af_kwargs = {
+    "weight_presence": w_pres,
+    "weight_persistence": w_pers,
+    "weight_continuity": w_cont,
+    "weight_change": w_chg,
+    "weight_harmonic": w_harm,
+    "persistence_halflife_ms": pers_half,
+    "smoothing_halflife_ms": smooth_half,
+    "continuity_neighborhood_erb": cont_erb,
+    "onset_weight": on_w,
+    "offset_weight": off_w,
+    "masking_radius_erb": mask_rad,
+    "masking_threshold_db": mask_thresh,
+    "floor_hz": floor_hz
+}
+
 cmap_option = st.sidebar.selectbox(
     "colormap",
     ['viridis', 'plasma', 'inferno', 'magma', 'turbo'],
@@ -266,7 +332,7 @@ if uploaded_file is not None:
     try:
         file_bytes = uploaded_file.getvalue()
         
-        results, sr = process_audio_chunked(file_bytes, uploaded_file.name, chunk_size=chunk_size)
+        results, sr = process_audio_chunked(file_bytes, uploaded_file.name, chunk_size=chunk_size, **af_kwargs)
         
         if not results:
             st.error("failed to process audio")
@@ -692,29 +758,29 @@ if uploaded_file is not None:
                 </div>
             </div>
 
-            <!-- Synchrosqueezed (SSQ) Card -->
+            <!-- Affordance Field Card -->
             <div class="plot-card">
                 <div class="card-header">
                     <div class="card-title">
-                        <span class="dot green"></span>synchrosqueezed (ssq)
+                        <span class="dot green"></span>affordance field A(t,f)
                     </div>
-                    <span class="card-subtitle">sharpened time-frequency representation</span>
-                </div>
-                <div class="plot-image-container">
-                    <img id="ssq-img" class="plot-image" src="" alt="SSQ representation">
-                </div>
-            </div>
-
-            <!-- Affordance Field Card -->
-            <div class="plot-card full-width">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="dot"></span>affordance field
-                    </div>
-                    <span class="card-subtitle">listening over time representation</span>
+                    <span class="card-subtitle">integrated listening features</span>
                 </div>
                 <div class="plot-image-container">
                     <img id="af-img" class="plot-image" src="" alt="Affordance Field">
+                </div>
+            </div>
+
+            <!-- Features Breakdown Card -->
+            <div class="plot-card full-width">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="dot"></span>features breakdown
+                    </div>
+                    <span class="card-subtitle">individual affordance components</span>
+                </div>
+                <div class="plot-image-container">
+                    <img id="feat-img" class="plot-image" src="" alt="Features Breakdown">
                 </div>
             </div>
         </div>
@@ -736,8 +802,8 @@ if uploaded_file is not None:
         const speedBtns = document.querySelectorAll('.speed-btn');
 
         const specImg = document.getElementById('spec-img');
-        const ssqImg = document.getElementById('ssq-img');
-        const afImg = document.getElementById('af-img');
+        
+        const afImg = document.getElementById('af-img');\n        const featImg = document.getElementById('feat-img');
         const segmentsContainer = document.getElementById('segments-container');
 
         let activeChunkIdx = -1;
@@ -776,8 +842,8 @@ if uploaded_file is not None:
         function preloadImages() {
             chunks.forEach(chunk => {
                 new Image().src = chunk.spec_img;
-                new Image().src = chunk.ssq_img;
-                new Image().src = chunk.af_img;
+                
+                new Image().src = chunk.af_img;\n                new Image().src = chunk.feat_img;
             });
         }
         preloadImages();
@@ -792,17 +858,17 @@ if uploaded_file is not None:
             
             // Smooth image crossfade
             specImg.style.opacity = '0.4';
-            ssqImg.style.opacity = '0.4';
-            afImg.style.opacity = '0.4';
+            
+            afImg.style.opacity = '0.4';\n            featImg.style.opacity = '0.4';
             
             setTimeout(() => {
                 specImg.src = chunk.spec_img;
-                ssqImg.src = chunk.ssq_img;
-                afImg.src = chunk.af_img;
+                
+                afImg.src = chunk.af_img;\n                featImg.src = chunk.feat_img;
                 
                 specImg.style.opacity = '1';
-                ssqImg.style.opacity = '1';
-                afImg.style.opacity = '1';
+                
+                afImg.style.opacity = '1';\n                featImg.style.opacity = '1';
             }, 80);
             
             // Update chunk blocks style
@@ -963,39 +1029,63 @@ if uploaded_file is not None:
                 st.pyplot(fig_spec)
                 plt.close(fig_spec)
 
+            
+
             with col2:
-                st.subheader("synchrosqueezed (ssq)")
-                fig_ssq, ax_ssq = plt.subplots(figsize=(10, 5))
-                img_ssq = ax_ssq.imshow(
-                    res["Tx_mag"], 
+                st.subheader(f"affordance field A(t, f)")
+                fig_af, ax_af = plt.subplots(figsize=(10, 5))
+                im_af = ax_af.imshow(
+                    res["field"], 
                     aspect='auto', 
                     origin='lower', 
-                    cmap='inferno', 
-                    extent=[res["offset"], res["offset"] + res["duration"], 0, sr/2]
+                    cmap=cmap_option,
+                    extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
                 )
-                ax_ssq.set_ylim([0, 8000])
-                ax_ssq.set_xlabel("time (s)")
-                ax_ssq.set_ylabel("freq (hz)")
-                fig_ssq.colorbar(img_ssq, ax=ax_ssq)
-                st.pyplot(fig_ssq)
-                plt.close(fig_ssq)
+                ax_af.set_ylim([60, 4000])
+                ax_af.set_title(f"spectral affordance field - chunk {chunk_idx+1}")
+                ax_af.set_xlabel("time (s)")
+                ax_af.set_ylabel("freq (hz)")
+                fig_af.colorbar(im_af, ax=ax_af)
+                st.pyplot(fig_af)
+                plt.close(fig_af)
 
-            st.subheader(f"affordance field ({cmap_option})")
-            fig_af, ax_af = plt.subplots(figsize=(15, 6))
-            im_af = ax_af.imshow(
-                res["field"], 
-                aspect='auto', 
-                origin='lower', 
-                cmap=cmap_option,
-                extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
-            )
-            ax_af.set_ylim([60, 4000])
-            ax_af.set_title(f"spectral affordance field - chunk {chunk_idx+1}")
-            ax_af.set_xlabel("time (s)")
-            ax_af.set_ylabel("freq (hz)")
-            fig_af.colorbar(im_af, ax=ax_af)
-            st.pyplot(fig_af)
-            plt.close(fig_af)
+            st.subheader("features breakdown")
+            fig_feat, axes = plt.subplots(3, 2, figsize=(15, 10))
+            plt.subplots_adjust(hspace=0.4, wspace=0.2)
+            
+            def plot_feat_static(ax, data, title, is_hot=True):
+                im = ax.imshow(
+                    data, aspect='auto', origin='lower',
+                    cmap='hot' if is_hot else cmap_option,
+                    extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
+                )
+                ax.set_ylim([60, 4000])
+                ax.set_title(title)
+                fig_feat.colorbar(im, ax=ax)
+                
+            plot_feat_static(axes[0, 0], res["presence"], "[E] Presence")
+            plot_feat_static(axes[0, 1], res["persistence"], "[P] Persistence")
+            plot_feat_static(axes[1, 0], res["continuity"], "[C] Continuity")
+            plot_feat_static(axes[1, 1], res["change"], "[D] Change")
+            plot_feat_static(axes[2, 0], res["coherence"], "[H] Harmonic Coherence")
+            
+            ax_prof = axes[2, 1]
+            mid_idx = res["presence"].shape[1] // 2
+            f_mask = res["freqs"] <= 4000
+            ax_prof.plot(res["freqs"][f_mask], res["presence"][f_mask, mid_idx], 'b-', lw=1, label='E')
+            ax_prof.plot(res["freqs"][f_mask], res["persistence"][f_mask, mid_idx], 'g-', lw=1, label='P')
+            ax_prof.plot(res["freqs"][f_mask], res["continuity"][f_mask, mid_idx], 'm-', lw=1, label='C')
+            ax_prof.plot(res["freqs"][f_mask], res["change"][f_mask, mid_idx], 'r-', lw=1, label='D')
+            ax_prof.plot(res["freqs"][f_mask], res["coherence"][f_mask, mid_idx], 'c-', lw=1, label='H')
+            ax_prof.plot(res["freqs"][f_mask], res["field"][f_mask, mid_idx], 'k-', lw=2, label='A')
+            ax_prof.set_xlim([800, 4000])
+            ax_prof.set_ylim([0, 1.1])
+            ax_prof.legend(loc='upper right', fontsize=8)
+            ax_prof.set_title(f"Profiles at t={res['times'][mid_idx]:.2f}s")
+            ax_prof.set_xlabel("Frequency (Hz)")
+            
+            st.pyplot(fig_feat)
+            plt.close(fig_feat)
 
             # audio player
             st.subheader(f"audio playback - chunk {chunk_idx+1}")
@@ -1014,6 +1104,6 @@ else:
     ### listening affordance analysis
     this tool uses chunked processing to analyze audio through:
     - **stft spectrogram**
-    - **synchrosqueezing** (sharpened time-frequency)
+    
     - **affordance field** (multi-feature listening representation)
     """)
