@@ -82,7 +82,7 @@ def generate_base64_plots(results, sr, cmap_option):
         spec_img = render_plot_to_base64(fig_spec)
         
         # 2. Affordance Field A(t, f)
-        fig_af, ax_af = plt.subplots(figsize=(8, 3), facecolor='none')
+        fig_af, ax_af = plt.subplots(figsize=(12, 6), facecolor='none')
         ax_af.set_facecolor('none')
         im_af = ax_af.imshow(
             res["field"], 
@@ -97,41 +97,18 @@ def generate_base64_plots(results, sr, cmap_option):
         fig_af.colorbar(im_af, ax=ax_af)
         af_img = render_plot_to_base64(fig_af)
         
-        # 3. Features Breakdown
-        fig_feat, axes = plt.subplots(3, 2, figsize=(15, 8), facecolor='none')
+        # Mid-frame profile (simplified to only show A and maybe E)
+        fig_feat, ax_prof = plt.subplots(figsize=(8, 3), facecolor='none')
         fig_feat.patch.set_facecolor('none')
-        plt.subplots_adjust(hspace=0.4, wspace=0.2)
-        
-        def plot_feat(ax, data, title, is_hot=True):
-            im = ax.imshow(
-                data, aspect='auto', origin='lower',
-                cmap='hot' if is_hot else cmap_option,
-                extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
-            )
-            ax.set_ylim([60, 4000])
-            ax.set_title(title)
-            fig_feat.colorbar(im, ax=ax)
-            
-        plot_feat(axes[0, 0], res["presence"], "[E] Presence")
-        plot_feat(axes[0, 1], res["persistence"], "[P] Persistence")
-        plot_feat(axes[1, 0], res["continuity"], "[C] Continuity")
-        plot_feat(axes[1, 1], res["change"], "[D] Change")
-        plot_feat(axes[2, 0], res["coherence"], "[H] Harmonic Coherence")
-        
-        # Mid-frame profile
-        ax_prof = axes[2, 1]
         mid_idx = res["presence"].shape[1] // 2
         f_mask = res["freqs"] <= 4000
-        ax_prof.plot(res["freqs"][f_mask], res["presence"][f_mask, mid_idx], 'b-', lw=1, label='E')
-        ax_prof.plot(res["freqs"][f_mask], res["persistence"][f_mask, mid_idx], 'g-', lw=1, label='P')
-        ax_prof.plot(res["freqs"][f_mask], res["continuity"][f_mask, mid_idx], 'm-', lw=1, label='C')
-        ax_prof.plot(res["freqs"][f_mask], res["change"][f_mask, mid_idx], 'r-', lw=1, label='D')
-        ax_prof.plot(res["freqs"][f_mask], res["coherence"][f_mask, mid_idx], 'c-', lw=1, label='H')
-        ax_prof.plot(res["freqs"][f_mask], res["field"][f_mask, mid_idx], 'w-', lw=2, label='A')
+        
+        ax_prof.plot(res["freqs"][f_mask], res["field"][f_mask, mid_idx], 'w-', lw=2, label='Affordance (A)')
+        ax_prof.plot(res["freqs"][f_mask], res["presence"][f_mask, mid_idx], 'b-', lw=1, alpha=0.5, label='Presence (E)')
         ax_prof.set_xlim([800, 4000])
         ax_prof.set_ylim([0, 1.1])
         ax_prof.legend(loc='upper right', fontsize=8)
-        ax_prof.set_title(f"Profiles at t={res['times'][mid_idx]:.2f}s")
+        ax_prof.set_title(f"Profile at t={res['times'][mid_idx]:.2f}s")
         ax_prof.set_xlabel("Frequency (Hz)")
         
         feat_img = render_plot_to_base64(fig_feat)
@@ -284,25 +261,38 @@ if uploaded_file is not None:
 chunk_size = st.sidebar.slider("chunk size (seconds)", min_chunk, max_chunk, default_chunk)
 
 st.sidebar.subheader("affordance parameters")
+
+expected_singers = st.sidebar.slider("expected singers", 1, 12, 4)
+t_val = (expected_singers - 1) / 11.0
+t_quad = t_val ** 2
+
+def quad_interp(solo_val, choir_val, t_q):
+    return solo_val + (choir_val - solo_val) * t_q
+
+default_mask_rad = float(quad_interp(4.0, 1.0, t_quad))
+default_mask_thresh = float(quad_interp(15.0, 5.0, t_quad))
+default_harm_w = float(quad_interp(0.2, 1.5, t_quad))
+default_cont_erb = float(quad_interp(0.6, 0.2, t_quad))
+
 with st.sidebar.expander("feature weights"):
     w_pres = st.slider("presence weight", 0.0, 2.0, 0.8, 0.1)
     w_pers = st.slider("persistence weight", 0.0, 2.0, 0.5, 0.1)
     w_cont = st.slider("continuity weight", 0.0, 2.0, 0.5, 0.1)
     w_chg = st.slider("change weight", 0.0, 2.0, 1.0, 0.1)
-    w_harm = st.slider("harmonic weight", 0.0, 2.0, 1.0, 0.1)
+    w_harm = st.slider("harmonic weight", 0.0, 2.0, default_harm_w, 0.1)
 
 with st.sidebar.expander("time constants (ms)"):
     pers_half = st.slider("persistence halflife", 10.0, 200.0, 50.0, 5.0)
     smooth_half = st.slider("smoothing halflife", 10.0, 100.0, 30.0, 5.0)
 
 with st.sidebar.expander("other params"):
-    cont_erb = st.slider("continuity neighborhood (ERB)", 0.1, 2.0, 0.3, 0.1)
+    cont_erb = st.slider("continuity neighborhood (ERB)", 0.1, 2.0, default_cont_erb, 0.1)
     on_w = st.slider("onset weight", 0.0, 1.0, 0.65, 0.05)
     off_w = st.slider("offset weight", 0.0, 1.0, 0.35, 0.05)
 
 with st.sidebar.expander("peripheral & masking"):
-    mask_rad = st.slider("masking radius (ERB)", 0.5, 5.0, 2.5, 0.1)
-    mask_thresh = st.slider("masking threshold (dB)", 0.0, 20.0, 8.0, 1.0)
+    mask_rad = st.slider("masking radius (ERB)", 0.5, 5.0, default_mask_rad, 0.1)
+    mask_thresh = st.slider("masking threshold (dB)", 0.0, 20.0, default_mask_thresh, 1.0)
     floor_hz = st.slider("harmonic floor (Hz)", 50.0, 1000.0, 100.0, 50.0)
     
 af_kwargs = {
@@ -758,8 +748,21 @@ if uploaded_file is not None:
                 </div>
             </div>
 
-            <!-- Affordance Field Card -->
+            <!-- Mid-frame Profile Card -->
             <div class="plot-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="dot"></span>mid-frame profile
+                    </div>
+                    <span class="card-subtitle">1D slice</span>
+                </div>
+                <div class="plot-image-container">
+                    <img id="feat-img" class="plot-image" src="" alt="Mid-frame Profile">
+                </div>
+            </div>
+
+            <!-- Affordance Field Card -->
+            <div class="plot-card full-width">
                 <div class="card-header">
                     <div class="card-title">
                         <span class="dot green"></span>affordance field A(t,f)
@@ -768,19 +771,6 @@ if uploaded_file is not None:
                 </div>
                 <div class="plot-image-container">
                     <img id="af-img" class="plot-image" src="" alt="Affordance Field">
-                </div>
-            </div>
-
-            <!-- Features Breakdown Card -->
-            <div class="plot-card full-width">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="dot"></span>features breakdown
-                    </div>
-                    <span class="card-subtitle">individual affordance components</span>
-                </div>
-                <div class="plot-image-container">
-                    <img id="feat-img" class="plot-image" src="" alt="Features Breakdown">
                 </div>
             </div>
         </div>
@@ -1009,83 +999,55 @@ if uploaded_file is not None:
             
             res = results[chunk_idx]
             
-            col1, col2 = st.columns(2)
+            st.subheader("spectrogram (stft)")
+            fig_spec, ax_spec = plt.subplots(figsize=(12, 4))
+            img = ax_spec.imshow(
+                res["S_db"], 
+                aspect='auto', 
+                origin='lower', 
+                cmap='magma',
+                extent=[res["offset"], res["offset"] + res["duration"], 0, sr/2],
+                vmin=-80, vmax=0
+            )
+            ax_spec.set_ylim([0, 8000])
+            ax_spec.set_xlabel("time (s)")
+            ax_spec.set_ylabel("freq (hz)")
+            fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db")
+            st.pyplot(fig_spec)
+            plt.close(fig_spec)
             
-            with col1:
-                st.subheader("spectrogram (stft)")
-                fig_spec, ax_spec = plt.subplots(figsize=(10, 5))
-                img = ax_spec.imshow(
-                    res["S_db"], 
-                    aspect='auto', 
-                    origin='lower', 
-                    cmap='magma',
-                    extent=[res["offset"], res["offset"] + res["duration"], 0, sr/2],
-                    vmin=-80, vmax=0
-                )
-                ax_spec.set_ylim([0, 8000])
-                ax_spec.set_xlabel("time (s)")
-                ax_spec.set_ylabel("freq (hz)")
-                fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db")
-                st.pyplot(fig_spec)
-                plt.close(fig_spec)
-
-            
-
-            with col2:
-                st.subheader(f"affordance field A(t, f)")
-                fig_af, ax_af = plt.subplots(figsize=(10, 5))
-                im_af = ax_af.imshow(
-                    res["field"], 
-                    aspect='auto', 
-                    origin='lower', 
-                    cmap=cmap_option,
-                    extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
-                )
-                ax_af.set_ylim([60, 4000])
-                ax_af.set_title(f"spectral affordance field - chunk {chunk_idx+1}")
-                ax_af.set_xlabel("time (s)")
-                ax_af.set_ylabel("freq (hz)")
-                fig_af.colorbar(im_af, ax=ax_af)
-                st.pyplot(fig_af)
-                plt.close(fig_af)
-
-            st.subheader("features breakdown")
-            fig_feat, axes = plt.subplots(3, 2, figsize=(15, 10))
-            plt.subplots_adjust(hspace=0.4, wspace=0.2)
-            
-            def plot_feat_static(ax, data, title, is_hot=True):
-                im = ax.imshow(
-                    data, aspect='auto', origin='lower',
-                    cmap='hot' if is_hot else cmap_option,
-                    extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
-                )
-                ax.set_ylim([60, 4000])
-                ax.set_title(title)
-                fig_feat.colorbar(im, ax=ax)
-                
-            plot_feat_static(axes[0, 0], res["presence"], "[E] Presence")
-            plot_feat_static(axes[0, 1], res["persistence"], "[P] Persistence")
-            plot_feat_static(axes[1, 0], res["continuity"], "[C] Continuity")
-            plot_feat_static(axes[1, 1], res["change"], "[D] Change")
-            plot_feat_static(axes[2, 0], res["coherence"], "[H] Harmonic Coherence")
-            
-            ax_prof = axes[2, 1]
+            st.subheader("mid-frame profile")
+            fig_feat, ax_prof = plt.subplots(figsize=(12, 4))
             mid_idx = res["presence"].shape[1] // 2
             f_mask = res["freqs"] <= 4000
-            ax_prof.plot(res["freqs"][f_mask], res["presence"][f_mask, mid_idx], 'b-', lw=1, label='E')
-            ax_prof.plot(res["freqs"][f_mask], res["persistence"][f_mask, mid_idx], 'g-', lw=1, label='P')
-            ax_prof.plot(res["freqs"][f_mask], res["continuity"][f_mask, mid_idx], 'm-', lw=1, label='C')
-            ax_prof.plot(res["freqs"][f_mask], res["change"][f_mask, mid_idx], 'r-', lw=1, label='D')
-            ax_prof.plot(res["freqs"][f_mask], res["coherence"][f_mask, mid_idx], 'c-', lw=1, label='H')
-            ax_prof.plot(res["freqs"][f_mask], res["field"][f_mask, mid_idx], 'k-', lw=2, label='A')
+            
+            ax_prof.plot(res["freqs"][f_mask], res["field"][f_mask, mid_idx], 'k-', lw=2, label='Affordance (A)')
+            ax_prof.plot(res["freqs"][f_mask], res["presence"][f_mask, mid_idx], 'b-', lw=1, alpha=0.5, label='Presence (E)')
             ax_prof.set_xlim([800, 4000])
             ax_prof.set_ylim([0, 1.1])
             ax_prof.legend(loc='upper right', fontsize=8)
-            ax_prof.set_title(f"Profiles at t={res['times'][mid_idx]:.2f}s")
+            ax_prof.set_title(f"Profile at t={res['times'][mid_idx]:.2f}s")
             ax_prof.set_xlabel("Frequency (Hz)")
-            
             st.pyplot(fig_feat)
             plt.close(fig_feat)
+
+            # Make the Affordance Field the big picture, full width, at the bottom
+            st.subheader(f"affordance field A(t, f)")
+            fig_af, ax_af = plt.subplots(figsize=(12, 6))
+            im_af = ax_af.imshow(
+                res["field"], 
+                aspect='auto', 
+                origin='lower', 
+                cmap=cmap_option,
+                extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
+            )
+            ax_af.set_ylim([60, 4000])
+            ax_af.set_title(f"spectral affordance field - chunk {chunk_idx+1}")
+            ax_af.set_xlabel("time (s)")
+            ax_af.set_ylabel("freq (hz)")
+            fig_af.colorbar(im_af, ax=ax_af)
+            st.pyplot(fig_af)
+            plt.close(fig_af)
 
             # audio player
             st.subheader(f"audio playback - chunk {chunk_idx+1}")

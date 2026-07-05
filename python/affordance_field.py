@@ -165,10 +165,21 @@ class AffordanceField:
             mask = self.harmonic_mask[r_idx]
             harmonic_support_ratio = np.zeros_like(power_dB)
             for f in range(self.n_freq):
-                m = mask[f]
-                if np.any(m):
-                    harmonic_power = np.max(power_dB[m, :], axis=0)
-                    harmonic_support_ratio[f, :] = (harmonic_power >= power_dB[f, :] - self.harmonic_amplitude_threshold_db)
+                m_up = mask[f, :]
+                m_down = mask[:, f]
+                
+                if np.any(m_up):
+                    harmonic_power = np.max(power_dB[m_up, :], axis=0)
+                    support_up = (harmonic_power >= power_dB[f, :] - self.harmonic_amplitude_threshold_db)
+                    
+                    if np.any(m_down):
+                        subharmonic_power = np.max(power_dB[m_down, :], axis=0)
+                        suppress_down = (subharmonic_power > power_dB[f, :] + self.harmonic_amplitude_threshold_db)
+                    else:
+                        suppress_down = False
+                        
+                    harmonic_support_ratio[f, :] = support_up & (~suppress_down)
+                    
             H += harmonic_support_ratio * valid_f0
             
         H = H / len(self.harmonic_check_ratios)
@@ -187,7 +198,8 @@ class AffordanceField:
         A = scipy.signal.lfilter([1 - alpha_smooth], [1, -alpha_smooth], A_gated, axis=1)
         A[:, 0] = A_gated[:, 0]
         
-        A = A ** 2
+        # Cull slightly to reduce "redness" and spurious high-affordance frequencies
+        A = A ** 3
         
         times = librosa.frames_to_time(np.arange(n_time), sr=sr, hop_length=hop_n)
         
