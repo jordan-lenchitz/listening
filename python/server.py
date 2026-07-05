@@ -7,17 +7,22 @@ import concurrent.futures
 import librosa
 import numpy as np
 import math
-from dual_process_tracker import DualProcessPitchTracker
+from multi_f0_tracker import MultiF0Tracker, TrackerConfig
 
 def process_chunk(file_path: str, offset: float, duration: float):
-    tracker = DualProcessPitchTracker(
-        audio_file=file_path,
-        use_synsq=True,
-        offset=offset,
-        duration=duration
-    )
-    tracker.run()
-    return getattr(tracker, "tracks", []), tracker.time_axis.tolist()
+    audio, sr = librosa.load(file_path, sr=None, mono=True, offset=offset, duration=duration)
+    config = TrackerConfig()
+    tracker = MultiF0Tracker(config)
+    result = tracker.track(audio, sr)
+    
+    chunk_time_axis = [t + offset for t in result["times"]]
+    
+    tracks_out = []
+    for voice in result["sung_voices"] + result["extra_pitches"]:
+        track_times = [chunk_time_axis[f] for f in voice.frames]
+        tracks_out.append({"time": track_times, "f0": voice.pitches})
+        
+    return tracks_out, chunk_time_axis
 
 app = FastAPI(title="Affordance Tracker API", version="1.0.0")
 

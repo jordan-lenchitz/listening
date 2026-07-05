@@ -7,7 +7,7 @@ import sys
 sys.path.append(os.path.dirname(__file__))
 
 from affordance_field import AffordanceField
-from dual_process_tracker import DualProcessPitchTracker
+from multi_f0_tracker import MultiF0Tracker, TrackerConfig, visualize_tracks
 from tracking_result import TrackingResult
 from just_intonation import JustIntonation
 
@@ -31,28 +31,28 @@ def main():
     af.visualize(affordance_results, output_path=affordance_plot)
     print(f"   Affordance field visualized and saved to {affordance_plot}")
 
-    print(f"\nStep 2: Running Dual-Process Pitch Tracker...")
-    # This might take a moment due to Synchrosqueezing
-    tracker = DualProcessPitchTracker(audio_path, use_synsq=True)
-    tracker.run()
+    print(f"\nStep 2: Running Multi-F0 Tracker...")
+    # This might take a moment
+    audio, sr = librosa.load(audio_path, sr=None, mono=True)
+    tracker = MultiF0Tracker(TrackerConfig())
+    result = tracker.track(audio, sr)
     
     tracker_plot = "/tmp/pitch_trajectories.png"
-    tracker.plot_tracks(output_path=tracker_plot)
+    visualize_tracks(result, output_path=tracker_plot, show=False)
     print(f"   Pitch trajectories visualized and saved to {tracker_plot}")
 
     print(f"\nStep 3: Just Intonation Analysis...")
     # Example: Analyze first frame of top 3 tracks if they exist
-    active_tracks = [t for t in tracker.tracks if not np.isnan(t["f0"]).all()]
+    active_tracks = result["sung_voices"]
     if active_tracks:
         print(f"   Detected {len(active_tracks)} active tracks.")
         # Pick a point in time where most voices are active
         # For simplicity, just look at the middle of the first track
-        mid_idx = len(active_tracks[0]["f0"]) // 2
+        mid_idx = len(active_tracks[0].pitches) // 2
         current_freqs = []
         for tr in active_tracks:
-            f = tr["f0"][mid_idx]
-            if not np.isnan(f):
-                current_freqs.append(f)
+            if len(tr.pitches) > mid_idx:
+                current_freqs.append(tr.pitches[mid_idx])
         
         if current_freqs:
             ji = JustIntonation()
