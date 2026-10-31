@@ -5,7 +5,6 @@ from typing import List, Dict, Any, Optional
 class TrackingResult:
     """
     Container for Multi-F0 tracking results with visualization.
-    
     """
     def __init__(self, times: np.ndarray, voices: List[Dict[str, Any]], ghosts: List[Dict[str, Any]], sr: int, hop: int):
         self.times = times
@@ -45,10 +44,6 @@ class TrackingResult:
         # Plot sung voices
         for i, voice in enumerate(self.sung_voices):
             color = colors[i % len(colors)]
-            
-            
-            
-            
             if isinstance(voice, dict):
                 tt = voice.get("time", [])
                 pp = voice.get("f0", [])

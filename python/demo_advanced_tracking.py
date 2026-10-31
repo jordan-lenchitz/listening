@@ -12,42 +12,29 @@ from tracking_result import TrackingResult
 from just_intonation import JustIntonation
 
 def main():
-    print("="*60)
-    print("   ADVANCED MULTI-F0 TRACKING & AFFORDANCE ANALYSIS")
-    print("="*60)
-
-    # Use example file
-    audio_path = "/tmp/listening/mp3/example_one.mp3"
+    audio_path = os.path.join(os.path.dirname(__file__), "..", "mp3", "example_one.mp3")
     if not os.path.exists(audio_path):
         print(f"Error: Could not find {audio_path}")
         return
 
-    print(f"\nStep 1: Analyzing Spectral Affordances...")
+    print("Analyzing spectral affordances...")
     audio, sr = librosa.load(audio_path, sr=22050)
-    af = AffordanceField(sample_rate=sr)
-    affordance_results = af.compute(audio)
-    
-    affordance_plot = "/tmp/affordance_analysis.png"
-    af.visualize(affordance_results, output_path=affordance_plot)
-    print(f"   Affordance field visualized and saved to {affordance_plot}")
+    af = AffordanceField(sr=sr)
+    affordance_results = af.compute(audio, sr)
 
-    print(f"\nStep 2: Running Multi-F0 Tracker...")
-    # This might take a moment
+    print("Running multi-F0 tracker...")
     audio, sr = librosa.load(audio_path, sr=None, mono=True)
     tracker = MultiF0Tracker(TrackerConfig())
     result = tracker.track(audio, sr)
     
     tracker_plot = "/tmp/pitch_trajectories.png"
     visualize_tracks(result, output_path=tracker_plot, show=False)
-    print(f"   Pitch trajectories visualized and saved to {tracker_plot}")
+    print(f"Pitch trajectories saved to {tracker_plot}")
 
-    print(f"\nStep 3: Just Intonation Analysis...")
-    # Example: Analyze first frame of top 3 tracks if they exist
+    print("Running just intonation analysis...")
     active_tracks = result["sung_voices"]
     if active_tracks:
-        print(f"   Detected {len(active_tracks)} active tracks.")
-        # Pick a point in time where most voices are active
-        # For simplicity, just look at the middle of the first track
+        print(f"Detected {len(active_tracks)} active tracks.")
         mid_idx = len(active_tracks[0].pitches) // 2
         current_freqs = []
         for tr in active_tracks:
@@ -57,15 +44,11 @@ def main():
         if current_freqs:
             ji = JustIntonation()
             cents = ji.cents_from_equal_tempered(current_freqs)
-            print(f"   Frequencies at mid-point: {np.round(current_freqs, 1)} Hz")
-            print(f"   Deviation from ET (cents): {np.round(cents, 1)}")
+            print(f"Frequencies at mid-point: {np.round(current_freqs, 1)} Hz")
+            print(f"Deviation from ET (cents): {np.round(cents, 1)}")
             
             combos = ji.combination_tones(current_freqs)
-            print(f"   Predicted combination tones: {np.round(combos, 1)} Hz")
-
-    print("\n" + "="*60)
-    print("   ANALYSIS COMPLETE")
-    print("="*60)
+            print(f"Predicted combination tones: {np.round(combos, 1)} Hz")
 
 if __name__ == "__main__":
     # Ensure matplotlib works in headless environment

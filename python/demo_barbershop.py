@@ -40,7 +40,6 @@ def synthesize_voice(t, f0, entry_time, exit_time, sr):
         envelope[exit_idx-fade_len:exit_idx] = np.linspace(1, 0, fade_len)
 
     # Smooth the envelope
-    
     envelope = savgol_filter(envelope, 101, 3)
     envelope = np.clip(envelope, 0, 1)
     

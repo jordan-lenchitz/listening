@@ -56,7 +56,6 @@ def render_plot_to_base64(fig):
 
 @st.cache_data(show_spinner="Pre-rendering visualization frames...")
 def generate_base64_plots(results, sr, cmap_option):
-    
     plt.style.use('dark_background')
     
     rendered_chunks = []
@@ -194,8 +193,6 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0, **af_kwargs):
                 # Streamlit UI updates inside main thread loop
                 status_text.text(f"processed chunk {i+1}/{n_chunks}")
                 progress_bar.progress((i + 1) / n_chunks)
-        
-        # Sort results by offset to maintain correct chunk order in case futures completed out of order
         
         all_results.sort(key=lambda x: x["offset"])
         
@@ -1031,7 +1028,6 @@ if uploaded_file is not None:
             st.pyplot(fig_feat)
             plt.close(fig_feat)
 
-            
             st.subheader(f"affordance field A(t, f)")
             fig_af, ax_af = plt.subplots(figsize=(12, 6))
             im_af = ax_af.imshow(

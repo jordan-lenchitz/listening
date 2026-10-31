@@ -4,7 +4,6 @@ from typing import List, Optional
 class JustIntonation:
     """
     Helpers for building chords from integer ratios and musical calculations.
-    
     """
     @staticmethod
     def chord(root_hz: float, ratios: np.ndarray) -> np.ndarray:

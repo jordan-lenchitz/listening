@@ -7,8 +7,6 @@ from typing import Dict, Any, Tuple, Optional
 class AffordanceField:
     """
     Spectral affordance field for a cappella listening.
-    
-    
     """
     def __init__(
         self,
@@ -138,7 +136,6 @@ class AffordanceField:
         P = P / (np.max(P) + 1e-12)
         
         # Continuity C
-        
         max_prev = scipy.ndimage.maximum_filter1d(E, size=2*self.neighborhood_bins+1, axis=0, mode="constant", cval=0.0)
         # Shift by 1 step
         max_prev_shifted = np.zeros_like(max_prev)
