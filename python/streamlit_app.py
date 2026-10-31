@@ -8,7 +8,7 @@ from affordance_field import AffordanceField
 import tempfile
 import os
 import time
-from pydub import AudioSegment
+import subprocess
 import io
 import base64
 import json
@@ -29,26 +29,70 @@ def get_audio_duration(file_bytes, file_name):
     return duration
 
 @st.cache_data
-def get_chunk_audio(file_bytes, file_name, offset, duration):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as tmp_file:
+def get_playable_audio(file_bytes, file_name):
+    ext = os.path.splitext(file_name)[1].lower()
+    if ext == ".mp3":
+        return file_bytes, "audio/mpeg"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
         tmp_file.write(file_bytes)
         tmp_path = tmp_file.name
     try:
-        audio = AudioSegment.from_file(tmp_path)
-        start_ms = offset * 1000
-        end_ms = (offset + duration) * 1000
-        chunk = audio[start_ms:end_ms]
-        
-        buffer = io.BytesIO()
-        chunk.export(buffer, format="mp3")
-        return buffer.getvalue()
+        res = subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_path, "-vn", "-c:a", "pcm_s16le", "-f", "wav", "pipe:1"],
+            capture_output=True,
+            check=True
+        )
+        return res.stdout, "audio/wav"
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+@st.cache_data
+def get_chunk_audio(file_bytes, file_name, offset, duration):
+    ext = os.path.splitext(file_name)[1].lower()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
+        tmp_file.write(file_bytes)
+        tmp_path = tmp_file.name
+    try:
+        res = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", str(offset),
+                "-t", str(duration),
+                "-i", tmp_path,
+                "-vn", "-c:a", "libmp3lame", "-q:a", "2", "-f", "mp3", "pipe:1"
+            ],
+            capture_output=True,
+            check=True
+        )
+        return res.stdout
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+def add_c_reference_ticks(ax_af, ylim=(130.8128, 4000)):
+    c3_hz = 130.8128
+    c_freqs = []
+    c_labels = []
+    k = 0
+    while True:
+        f = c3_hz * (2 ** k)
+        if f > ylim[1]:
+            break
+        if f >= ylim[0]:
+            c_freqs.append(f)
+            c_labels.append(f"C{3 + k}")
+        k += 1
+    ax_right = ax_af.twinx()
+    ax_right.set_ylim(ylim)
+    ax_right.set_yticks(c_freqs)
+    ax_right.set_yticklabels(c_labels)
+    ax_right.tick_params(axis="y", direction="out", length=4, pad=2, labelsize=8)
+    return ax_right
+
 def render_plot_to_base64(fig):
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", dpi=100)
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
     buf.seek(0)
     img_str = base64.b64encode(buf.read()).decode("utf-8")
     plt.close(fig)
@@ -64,7 +108,7 @@ def generate_base64_plots(results, sr, cmap_option):
         duration = res["duration"]
         
         # 1. Spectrogram
-        fig_spec, ax_spec = plt.subplots(figsize=(8, 3), facecolor='none')
+        fig_spec, ax_spec = plt.subplots(figsize=(16, 4.5), facecolor='none')
         ax_spec.set_facecolor('none')
         img = ax_spec.imshow(
             res["S_db"], 
@@ -77,11 +121,11 @@ def generate_base64_plots(results, sr, cmap_option):
         ax_spec.set_ylim([0, 8000])
         ax_spec.set_xlabel("time (s)")
         ax_spec.set_ylabel("freq (hz)")
-        fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db")
+        fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db", pad=0.06)
         spec_img = render_plot_to_base64(fig_spec)
         
         # 2. Affordance Field A(t, f)
-        fig_af, ax_af = plt.subplots(figsize=(12, 6), facecolor='none')
+        fig_af, ax_af = plt.subplots(figsize=(16, 6), facecolor='none')
         ax_af.set_facecolor('none')
         im_af = ax_af.imshow(
             res["field"], 
@@ -90,35 +134,19 @@ def generate_base64_plots(results, sr, cmap_option):
             cmap=cmap_option,
             extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
         )
-        ax_af.set_ylim([60, 4000])
+        ax_af.set_ylim([130.8128, 4000])
         ax_af.set_xlabel("time (s)")
         ax_af.set_ylabel("freq (hz)")
-        fig_af.colorbar(im_af, ax=ax_af)
+        add_c_reference_ticks(ax_af, (130.8128, 4000))
+        fig_af.colorbar(im_af, ax=ax_af, pad=0.06)
         af_img = render_plot_to_base64(fig_af)
-        
-        # Mid-frame profile (simplified to only show A and maybe E)
-        fig_feat, ax_prof = plt.subplots(figsize=(8, 3), facecolor='none')
-        fig_feat.patch.set_facecolor('none')
-        mid_idx = res["presence"].shape[1] // 2
-        f_mask = res["freqs"] <= 4000
-        
-        ax_prof.plot(res["freqs"][f_mask], res["field"][f_mask, mid_idx], 'w-', lw=2, label='Affordance (A)')
-        ax_prof.plot(res["freqs"][f_mask], res["presence"][f_mask, mid_idx], 'b-', lw=1, alpha=0.5, label='Presence (E)')
-        ax_prof.set_xlim([800, 4000])
-        ax_prof.set_ylim([0, 1.1])
-        ax_prof.legend(loc='upper right', fontsize=8)
-        ax_prof.set_title(f"Profile at t={res['times'][mid_idx]:.2f}s")
-        ax_prof.set_xlabel("Frequency (Hz)")
-        
-        feat_img = render_plot_to_base64(fig_feat)
         
         rendered_chunks.append({
             "idx": idx,
             "offset": offset,
             "duration": duration,
             "spec_img": spec_img,
-            "af_img": af_img,
-            "feat_img": feat_img
+            "af_img": af_img
         })
         
     return rendered_chunks
@@ -346,18 +374,8 @@ if uploaded_file is not None:
                 chunks_json_str = json.dumps(rendered_chunks)
                 
                 # 2. Encode audio to Base64 URI
-                audio_base64 = base64.b64encode(file_bytes).decode("utf-8")
-                ext = os.path.splitext(uploaded_file.name)[1].lower()
-                mime_type = "audio/mpeg"
-                if ext == '.mp3':
-                    mime_type = "audio/mp3"
-                elif ext == '.wav':
-                    mime_type = "audio/wav"
-                elif ext == '.flac':
-                    mime_type = "audio/flac"
-                elif ext == '.m4a':
-                    mime_type = "audio/mp4"
-                
+                playable_bytes, mime_type = get_playable_audio(file_bytes, uploaded_file.name)
+                audio_base64 = base64.b64encode(playable_bytes).decode("utf-8")
                 audio_data_uri = f"data:{mime_type};base64,{audio_base64}"
                 
                 # 3. HTML / CSS / JS Template for the custom player
@@ -604,8 +622,8 @@ if uploaded_file is not None:
 
         /* Grid */
         .plots-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: flex;
+            flex-direction: column;
             gap: 20px;
             width: 100%;
         }
@@ -620,10 +638,7 @@ if uploaded_file is not None:
             box-shadow: 0 6px 24px rgba(0,0,0,0.3);
             backdrop-filter: blur(8px);
             box-sizing: border-box;
-        }
-
-        .plot-card.full-width {
-            grid-column: span 2;
+            width: 100%;
         }
 
         .card-header {
@@ -677,16 +692,16 @@ if uploaded_file is not None:
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 250px;
+            height: 360px;
         }
 
-        .plot-card.full-width .plot-image-container {
-            height: 320px;
+        .plot-card.affordance-card .plot-image-container {
+            height: 460px;
         }
 
         .plot-image {
-            max-width: 100%;
-            max-height: 100%;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
             transition: opacity 0.15s ease-in-out;
         }
@@ -745,21 +760,8 @@ if uploaded_file is not None:
                 </div>
             </div>
 
-            <!-- Mid-frame Profile Card -->
-            <div class="plot-card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="dot"></span>mid-frame profile
-                    </div>
-                    <span class="card-subtitle">1D slice</span>
-                </div>
-                <div class="plot-image-container">
-                    <img id="feat-img" class="plot-image" src="" alt="Mid-frame Profile">
-                </div>
-            </div>
-
             <!-- Affordance Field Card -->
-            <div class="plot-card full-width">
+            <div class="plot-card affordance-card">
                 <div class="card-header">
                     <div class="card-title">
                         <span class="dot green"></span>affordance field A(t,f)
@@ -789,8 +791,7 @@ if uploaded_file is not None:
         const speedBtns = document.querySelectorAll('.speed-btn');
 
         const specImg = document.getElementById('spec-img');
-        
-        const afImg = document.getElementById('af-img');\n        const featImg = document.getElementById('feat-img');
+        const afImg = document.getElementById('af-img');
         const segmentsContainer = document.getElementById('segments-container');
 
         let activeChunkIdx = -1;
@@ -829,8 +830,7 @@ if uploaded_file is not None:
         function preloadImages() {
             chunks.forEach(chunk => {
                 new Image().src = chunk.spec_img;
-                
-                new Image().src = chunk.af_img;\n                new Image().src = chunk.feat_img;
+                new Image().src = chunk.af_img;
             });
         }
         preloadImages();
@@ -845,17 +845,14 @@ if uploaded_file is not None:
             
             // Smooth image crossfade
             specImg.style.opacity = '0.4';
-            
-            afImg.style.opacity = '0.4';\n            featImg.style.opacity = '0.4';
+            afImg.style.opacity = '0.4';
             
             setTimeout(() => {
                 specImg.src = chunk.spec_img;
-                
-                afImg.src = chunk.af_img;\n                featImg.src = chunk.feat_img;
+                afImg.src = chunk.af_img;
                 
                 specImg.style.opacity = '1';
-                
-                afImg.style.opacity = '1';\n                featImg.style.opacity = '1';
+                afImg.style.opacity = '1';
             }, 80);
             
             // Update chunk blocks style
@@ -989,7 +986,7 @@ if uploaded_file is not None:
                 html_code = HTML_TEMPLATE.replace("CHUNKS_DATA_PLACEHOLDER", chunks_json_str).replace("AUDIO_DATA_URI_PLACEHOLDER", audio_data_uri)
                 
                 # 4. Render HTML component inside Streamlit
-                components.html(html_code, height=1150, scrolling=True)
+                components.html(html_code, height=1100, scrolling=True)
         else:
             # Select chunk to view
             chunk_idx = st.select_slider("select chunk to visualize", options=range(len(results)), format_func=lambda x: f"chunk {x+1} ({results[x]['offset']:.1f}s)")
@@ -997,7 +994,7 @@ if uploaded_file is not None:
             res = results[chunk_idx]
             
             st.subheader("spectrogram (stft)")
-            fig_spec, ax_spec = plt.subplots(figsize=(12, 4))
+            fig_spec, ax_spec = plt.subplots(figsize=(16, 4.5))
             img = ax_spec.imshow(
                 res["S_db"], 
                 aspect='auto', 
@@ -1009,27 +1006,12 @@ if uploaded_file is not None:
             ax_spec.set_ylim([0, 8000])
             ax_spec.set_xlabel("time (s)")
             ax_spec.set_ylabel("freq (hz)")
-            fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db")
+            fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db", pad=0.06)
             st.pyplot(fig_spec)
             plt.close(fig_spec)
-            
-            st.subheader("mid-frame profile")
-            fig_feat, ax_prof = plt.subplots(figsize=(12, 4))
-            mid_idx = res["presence"].shape[1] // 2
-            f_mask = res["freqs"] <= 4000
-            
-            ax_prof.plot(res["freqs"][f_mask], res["field"][f_mask, mid_idx], 'k-', lw=2, label='Affordance (A)')
-            ax_prof.plot(res["freqs"][f_mask], res["presence"][f_mask, mid_idx], 'b-', lw=1, alpha=0.5, label='Presence (E)')
-            ax_prof.set_xlim([800, 4000])
-            ax_prof.set_ylim([0, 1.1])
-            ax_prof.legend(loc='upper right', fontsize=8)
-            ax_prof.set_title(f"Profile at t={res['times'][mid_idx]:.2f}s")
-            ax_prof.set_xlabel("Frequency (Hz)")
-            st.pyplot(fig_feat)
-            plt.close(fig_feat)
 
             st.subheader(f"affordance field A(t, f)")
-            fig_af, ax_af = plt.subplots(figsize=(12, 6))
+            fig_af, ax_af = plt.subplots(figsize=(16, 6))
             im_af = ax_af.imshow(
                 res["field"], 
                 aspect='auto', 
@@ -1037,11 +1019,12 @@ if uploaded_file is not None:
                 cmap=cmap_option,
                 extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
             )
-            ax_af.set_ylim([60, 4000])
+            ax_af.set_ylim([130.8128, 4000])
             ax_af.set_title(f"spectral affordance field - chunk {chunk_idx+1}")
             ax_af.set_xlabel("time (s)")
             ax_af.set_ylabel("freq (hz)")
-            fig_af.colorbar(im_af, ax=ax_af)
+            add_c_reference_ticks(ax_af, (130.8128, 4000))
+            fig_af.colorbar(im_af, ax=ax_af, pad=0.06)
             st.pyplot(fig_af)
             plt.close(fig_af)
 
@@ -1051,7 +1034,8 @@ if uploaded_file is not None:
             st.audio(chunk_audio, format="audio/mp3")
             
             with st.expander("full audio"):
-                st.audio(file_bytes, format=f"audio/{os.path.splitext(uploaded_file.name)[1][1:]}")
+                playable_bytes, mime_type = get_playable_audio(file_bytes, uploaded_file.name)
+                st.audio(playable_bytes, format=mime_type)
 
     except Exception as e:
         st.error(f"error: {str(e)}")
