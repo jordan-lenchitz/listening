@@ -6,14 +6,17 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  NODE_OPTIONS: "--no-deprecation"
+
 jobs:
   test-python:
     name: Run Python Tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.12'
     - name: Install dependencies
@@ -23,4 +26,4 @@ jobs:
         pip install -r requirements.txt
         pip install pytest fastapi httpx ssqueezepy pydub scipy
     - name: Test
-      run: cd python && pytest tests/test_server.py -p no:warnings
+      run: cd python && python -m pytest tests/ -p no:warnings
