@@ -68,26 +68,73 @@ class AffordanceField:
     def _hz_to_erb(self, f: np.ndarray) -> np.ndarray:
         return 21.4 * np.log10(1 + 0.00437 * f)
 
+    @staticmethod
+    def _build_range_queries(starts: np.ndarray, ends: np.ndarray):
+        """Group [starts[f], ends[f]) range-max queries by power-of-two level k."""
+        mask = starts < ends
+        if not np.any(mask):
+            return [], 0
+        lens = ends[mask] - starts[mask]
+        ks = np.floor(np.log2(lens)).astype(np.intp)
+        rows = np.flatnonzero(mask)
+        s1 = starts[mask]
+        s2 = ends[mask] - (1 << ks)
+        max_k = int(ks.max())
+        groups = []
+        for k in range(max_k + 1):
+            m = ks == k
+            if np.any(m):
+                groups.append((k, rows[m], s1[m], s2[m]))
+        return groups, max_k
+
+    @staticmethod
+    def _eval_range_max(st_levels, groups, out: np.ndarray, accumulate: bool = False):
+        """Evaluate pre-grouped [lo, hi) range-max queries using sparse table levels."""
+        for k, rows, s1, s2 in groups:
+            stk = st_levels[k]
+            vals = np.maximum(stk[s1], stk[s2])
+            out[rows] = np.maximum(out[rows], vals) if accumulate else vals
+        return out
+
     def _precompute(self):
         self.freqs_hz = librosa.fft_frequencies(sr=self.sr, n_fft=self.n_fft)
         self.freqs_erb = self._hz_to_erb(self.freqs_hz)
         self.n_freq = len(self.freqs_hz)
         
-        # 1. Neighborhood mask for availability
-        self.in_neighborhood_mask = np.abs(self.freqs_erb[:, np.newaxis] - self.freqs_erb[np.newaxis, :]) <= self.masking_radius_erb
-        np.fill_diagonal(self.in_neighborhood_mask, False)
+        # 1. Contiguous ERB neighborhood bounds [lo, hi) excluding f itself
+        lo = np.searchsorted(self.freqs_erb, self.freqs_erb - self.masking_radius_erb, side="left")
+        hi = np.searchsorted(self.freqs_erb, self.freqs_erb + self.masking_radius_erb, side="right")
+        for f in range(self.n_freq):
+            while lo[f] > 0 and abs(self.freqs_erb[lo[f] - 1] - self.freqs_erb[f]) <= self.masking_radius_erb:
+                lo[f] -= 1
+            while lo[f] < f and abs(self.freqs_erb[lo[f]] - self.freqs_erb[f]) > self.masking_radius_erb:
+                lo[f] += 1
+            while hi[f] < self.n_freq and abs(self.freqs_erb[hi[f]] - self.freqs_erb[f]) <= self.masking_radius_erb:
+                hi[f] += 1
+            while hi[f] > f + 1 and abs(self.freqs_erb[hi[f] - 1] - self.freqs_erb[f]) > self.masking_radius_erb:
+                hi[f] -= 1
+
+        fs = np.arange(self.n_freq)
+        self._neighbor_left_q, k_l = self._build_range_queries(lo, fs)
+        self._neighbor_right_q, k_r = self._build_range_queries(fs + 1, hi)
+        max_k = max(k_l, k_r)
         
-        # 2. Harmonic masks for H
-        self.harmonic_mask = np.zeros((len(self.harmonic_check_ratios), self.n_freq, self.n_freq), dtype=bool)
+        # 2. Contiguous harmonic and subharmonic query groups per ratio
         tolerance_ratio = 2 ** (self.harmonic_tolerance_cents / 1200.0)
-        
-        for r_idx, ratio in enumerate(self.harmonic_check_ratios):
-            for f in range(self.n_freq):
-                # Look up (for harmonic support)
-                target_up = self.freqs_hz[f] * ratio
-                lower_up = target_up / tolerance_ratio
-                upper_up = target_up * tolerance_ratio
-                self.harmonic_mask[r_idx, f, :] = (self.freqs_hz >= lower_up) & (self.freqs_hz <= upper_up)
+        self._harmonic_queries = []
+        for ratio in self.harmonic_check_ratios:
+            target_up = self.freqs_hz * ratio
+            lower_up = target_up / tolerance_ratio
+            upper_up = target_up * tolerance_ratio
+            up_lo = np.searchsorted(self.freqs_hz, lower_up, side="left")
+            up_hi = np.searchsorted(self.freqs_hz, upper_up, side="right")
+            down_lo = np.searchsorted(upper_up, self.freqs_hz, side="left")
+            down_hi = np.searchsorted(lower_up, self.freqs_hz, side="right")
+            q_up, k_u = self._build_range_queries(up_lo, up_hi)
+            q_down, k_d = self._build_range_queries(down_lo, down_hi)
+            max_k = max(max_k, k_u, k_d)
+            self._harmonic_queries.append((q_up, q_down))
+        self._max_sparse_k = max_k
                 
         # ERB bins for continuity
         self.erb_per_bin = np.mean(np.diff(self.freqs_erb)) if self.n_freq > 1 else 1.0
@@ -107,14 +154,16 @@ class AffordanceField:
         
         n_time = magnitude.shape[1]
         
-        # 2. Peripheral availability (Vectorized over time)
-        max_neighbor = np.zeros_like(power_dB)
-        for f in range(self.n_freq):
-            mask = self.in_neighborhood_mask[f]
-            if np.any(mask):
-                max_neighbor[f, :] = np.max(power_dB[mask, :], axis=0)
-            else:
-                max_neighbor[f, :] = -np.inf
+        # Build shared sparse table over frequency axis for O(1) range-max queries
+        st_levels = [power_dB]
+        for k in range(1, self._max_sparse_k + 1):
+            step = 1 << (k - 1)
+            st_levels.append(np.maximum(st_levels[k - 1][:-step], st_levels[k - 1][step:]))
+
+        # 2. Peripheral availability (vectorized via sparse table)
+        max_neighbor = np.full_like(power_dB, -np.inf)
+        self._eval_range_max(st_levels, self._neighbor_left_q, max_neighbor, accumulate=False)
+        self._eval_range_max(st_levels, self._neighbor_right_q, max_neighbor, accumulate=True)
                 
         shortfall = (max_neighbor - self.masking_threshold_db) - power_dB
         availability = np.where(max_neighbor > -np.inf,
@@ -153,31 +202,23 @@ class AffordanceField:
         D = self.onset_weight * onset + self.offset_weight * offset
         D = D / (np.max(D) + 1e-12)
         
-        # Harmonic coherence H (Vectorized over time)
+        # Harmonic coherence H (vectorized via shared sparse table)
         H = np.zeros_like(E)
         max_frame_dB = np.max(power_dB, axis=0) # shape (n_time,)
         valid_f0 = (self.freqs_hz >= self.floor_hz)[:, np.newaxis] & (power_dB >= max_frame_dB[np.newaxis, :] - 40)
         
-        for r_idx in range(len(self.harmonic_check_ratios)):
-            mask = self.harmonic_mask[r_idx]
-            harmonic_support_ratio = np.zeros_like(power_dB)
-            for f in range(self.n_freq):
-                m_up = mask[f, :]
-                m_down = mask[:, f]
-                
-                if np.any(m_up):
-                    harmonic_power = np.max(power_dB[m_up, :], axis=0)
-                    support_up = (harmonic_power >= power_dB[f, :] - self.harmonic_amplitude_threshold_db)
-                    
-                    if np.any(m_down):
-                        subharmonic_power = np.max(power_dB[m_down, :], axis=0)
-                        suppress_down = (subharmonic_power > power_dB[f, :] + self.harmonic_amplitude_threshold_db)
-                    else:
-                        suppress_down = False
-                        
-                    harmonic_support_ratio[f, :] = support_up & (~suppress_down)
-                    
-            H += harmonic_support_ratio * valid_f0
+        harmonic_power = np.empty_like(power_dB)
+        subharmonic_power = np.empty_like(power_dB)
+        for q_up, q_down in self._harmonic_queries:
+            harmonic_power.fill(-np.inf)
+            self._eval_range_max(st_levels, q_up, harmonic_power, accumulate=False)
+            support_up = harmonic_power >= power_dB - self.harmonic_amplitude_threshold_db
+
+            subharmonic_power.fill(-np.inf)
+            self._eval_range_max(st_levels, q_down, subharmonic_power, accumulate=False)
+            suppress_down = subharmonic_power > power_dB + self.harmonic_amplitude_threshold_db
+
+            H += (support_up & (~suppress_down)) * valid_f0
             
         H = H / len(self.harmonic_check_ratios)
         

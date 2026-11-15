@@ -1,13 +1,6 @@
 import streamlit as st
-from concurrent.futures import ThreadPoolExecutor
-import numpy as np
-import librosa
-import librosa.display
-import matplotlib.pyplot as plt
-from affordance_field import AffordanceField
 import tempfile
 import os
-import time
 import subprocess
 import io
 import base64
@@ -16,17 +9,18 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="listening dissertation demo", layout="wide", initial_sidebar_state="collapsed")
 
-@st.cache_data
-def get_audio_duration(file_bytes, file_name):
+@st.cache_data(show_spinner="decoding audio...")
+def load_audio_cached(file_bytes, file_name, sr=22050):
+    import librosa
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as tmp_file:
         tmp_file.write(file_bytes)
         tmp_path = tmp_file.name
     try:
-        duration = librosa.get_duration(path=tmp_path)
+        y, _ = librosa.load(tmp_path, sr=sr)
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-    return duration
+    return y
 
 @st.cache_data
 def get_playable_audio(file_bytes, file_name):
@@ -91,6 +85,7 @@ def add_c_reference_ticks(ax_af, ylim=(130.8128, 4000)):
     return ax_right
 
 def render_plot_to_base64(fig):
+    import matplotlib.pyplot as plt
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
     buf.seek(0)
@@ -98,8 +93,9 @@ def render_plot_to_base64(fig):
     plt.close(fig)
     return f"data:image/png;base64,{img_str}"
 
-@st.cache_data(show_spinner="Pre-rendering visualization frames...")
+@st.cache_data(show_spinner=False)
 def generate_base64_plots(results, sr, cmap_option):
+    import matplotlib.pyplot as plt
     plt.style.use('dark_background')
     
     rendered_chunks = []
@@ -120,8 +116,8 @@ def generate_base64_plots(results, sr, cmap_option):
         )
         ax_spec.set_ylim([0, 8000])
         ax_spec.set_xlabel("time (s)")
-        ax_spec.set_ylabel("freq (hz)")
-        fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db", pad=0.06)
+        ax_spec.set_ylabel("freq (Hz)")
+        fig_spec.colorbar(img, ax=ax_spec, format="%+2.f dB", pad=0.06)
         spec_img = render_plot_to_base64(fig_spec)
         
         # 2. Affordance Field A(t, f)
@@ -136,7 +132,7 @@ def generate_base64_plots(results, sr, cmap_option):
         )
         ax_af.set_ylim([130.8128, 4000])
         ax_af.set_xlabel("time (s)")
-        ax_af.set_ylabel("freq (hz)")
+        ax_af.set_ylabel("freq (Hz)")
         add_c_reference_ticks(ax_af, (130.8128, 4000))
         fig_af.colorbar(im_af, ax=ax_af, pad=0.06)
         af_img = render_plot_to_base64(fig_af)
@@ -153,13 +149,19 @@ def generate_base64_plots(results, sr, cmap_option):
 
 @st.cache_data(show_spinner=False)
 def process_audio_chunked(file_bytes, file_name, chunk_size=10.0, **af_kwargs):
-    duration_total = get_audio_duration(file_bytes, file_name)
-    n_chunks = int(np.ceil(duration_total / chunk_size))
-    
+    from concurrent.futures import ThreadPoolExecutor
+    import numpy as np
+    import librosa
+    from affordance_field import AffordanceField
+
     sr = 22050
     n_fft = 2048
     hop_length = 512
-    total_frames = int(duration_total * sr)
+
+    y_full = load_audio_cached(file_bytes, file_name, sr=sr)
+    total_samples = len(y_full)
+    duration_total = total_samples / sr
+    n_chunks = int(np.ceil(duration_total / chunk_size))
     
     af = AffordanceField(sr=sr, n_fft=n_fft, **af_kwargs)
     
@@ -169,23 +171,18 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0, **af_kwargs):
     progress_container = st.container()
     with progress_container:
         st.write(f"### analyzing {duration_total:.2f}s of audio")
-        st.write(f"- total audio frames: {total_frames:,}")
+        st.write(f"- total audio samples: {total_samples:,}")
         st.write(f"- total chunks: {n_chunks} ({chunk_size}s each)")
         st.write("- engine: stft + affordance field")
         
         progress_bar = st.progress(0.0)
         status_text = st.empty()
-    
-    # We'll save the file once to avoid repeated writes
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as tmp_file:
-        tmp_file.write(file_bytes)
-        tmp_path = tmp_file.name
 
     def process_single_chunk(i):
         offset = i * chunk_size
-        current_chunk_size = min(chunk_size, duration_total - offset)
-        
-        y_chunk, _ = librosa.load(tmp_path, sr=sr, offset=offset, duration=chunk_size)
+        start_sample = int(round(offset * sr))
+        end_sample = min(total_samples, int(round((offset + chunk_size) * sr)))
+        y_chunk = y_full[start_sample:end_sample]
         
         if len(y_chunk) < n_fft:
             return None
@@ -203,40 +200,29 @@ def process_audio_chunked(file_bytes, file_name, chunk_size=10.0, **af_kwargs):
             "field": af_results["field"],
             "times": af_results["times"] + offset,
             "freqs": af_results["frequencies"],
-            "presence": af_results["presence"],
-            "persistence": af_results["persistence"],
-            "continuity": af_results["continuity"],
-            "change": af_results["change"],
-            "coherence": af_results["coherence"],
         }
 
-    try:
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_single_chunk, i) for i in range(n_chunks)]
-            for i, future in enumerate(futures):
-                res = future.result()
-                if res is not None:
-                    all_results.append(res)
-                
-                # Streamlit UI updates inside main thread loop
-                status_text.text(f"processed chunk {i+1}/{n_chunks}")
-                progress_bar.progress((i + 1) / n_chunks)
-        
-        all_results.sort(key=lambda x: x["offset"])
-        
-        status_text.text("analysis complete.")
-        time.sleep(1)
-        progress_container.empty()
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_single_chunk, i) for i in range(n_chunks)]
+        for i, future in enumerate(futures):
+            res = future.result()
+            if res is not None:
+                all_results.append(res)
             
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+            # Streamlit UI updates inside main thread loop
+            status_text.text(f"processed chunk {i+1}/{n_chunks}")
+            progress_bar.progress((i + 1) / n_chunks)
+    
+    all_results.sort(key=lambda x: x["offset"])
+    
+    status_text.text("analysis complete")
+    progress_container.empty()
             
     return all_results, sr
 
 st.markdown("# [listening](https://github.com/jordan-lenchitz/listening) - spectral affordance analysis (chunked)")
 
-@st.cache_data(show_spinner="Downloading example from GCS...")
+@st.cache_data(show_spinner="downloading example from GCS...")
 def download_example_from_gcs(example_filename):
     from google.cloud import storage
     client = storage.Client()
@@ -245,13 +231,13 @@ def download_example_from_gcs(example_filename):
     return blob.download_as_bytes()
 
 # example selector
-example_options = ["None", "tim waurick (example_one.mp3)", "benedetti_1585.mp3", "jesu.mp3"]
+example_options = ["none", "tim waurick (example_one.mp3)", "benedetti_1585.mp3", "jesu.mp3"]
 selected_example = st.selectbox("feel free to choose an example", example_options)
 
 # file uploader
-uploaded_file = st.file_uploader("you are welcome to upload audio (mp3, wav, flac)", type=["mp3", "wav", "m4a", "flac"])
+uploaded_file = st.file_uploader("you are welcome to upload audio (mp3, wav, flac)", type=["mp3", "wav", "flac"])
 
-if selected_example != "None" and uploaded_file is None:
+if selected_example != "none" and uploaded_file is None:
     example_filename = "example_one.mp3" if "tim waurick" in selected_example else selected_example
     try:
         file_data = download_example_from_gcs(example_filename)
@@ -275,12 +261,13 @@ default_chunk = 10.0
 if uploaded_file is not None:
     try:
         file_bytes = uploaded_file.getvalue()
-        duration = get_audio_duration(file_bytes, uploaded_file.name)
+        y_full = load_audio_cached(file_bytes, uploaded_file.name, sr=22050)
+        duration = len(y_full) / 22050.0
         if duration < 5.0:
             min_chunk = 1.0
             max_chunk = 3.0
             default_chunk = 2.0
-    except Exception as e:
+    except Exception:
         pass
 
 chunk_size = st.sidebar.slider("chunk size (seconds)", min_chunk, max_chunk, default_chunk)
@@ -353,7 +340,8 @@ if uploaded_file is not None:
             st.error("failed to process audio")
             st.stop()
 
-        st.success(f"processed {len(results)} chunks")
+        n_results = len(results)
+        st.success(f"processed {n_results} {'chunk' if n_results == 1 else 'chunks'}")
 
         # Sidebar selection for playback and visual mode
         st.sidebar.subheader("visualizer settings")
@@ -368,7 +356,7 @@ if uploaded_file is not None:
         st.header("analysis results")
 
         if view_mode == "interactive dynamic player":
-            with st.spinner("Pre-rendering interactive dashboard frames..."):
+            with st.spinner("pre-rendering interactive dashboard frames..."):
                 # 1. Pre-render all chunk plots to Base64 PNGs
                 rendered_chunks = generate_base64_plots(results, sr, cmap_option)
                 chunks_json_str = json.dumps(rendered_chunks)
@@ -393,6 +381,7 @@ if uploaded_file is not None:
             margin: 0;
             padding: 10px;
             overflow-x: hidden;
+            overflow-y: hidden;
         }
 
         /* Scrollbar styling */
@@ -565,6 +554,7 @@ if uploaded_file is not None:
             display: flex;
             gap: 5px;
             width: 100%;
+            overflow-x: auto;
             background: rgba(18, 22, 32, 0.5);
             padding: 5px;
             border-radius: 8px;
@@ -715,7 +705,7 @@ if uploaded_file is not None:
         <!-- Player controls -->
         <div class="player-card">
             <div class="player-controls-row">
-                <button class="play-pause-btn" id="play-pause-btn" title="Play/Pause">
+                <button class="play-pause-btn" id="play-pause-btn" title="play/pause">
                     <svg id="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                     <svg id="pause-icon" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                 </button>
@@ -726,7 +716,7 @@ if uploaded_file is not None:
                 </div>
 
                 <div class="volume-container">
-                    <button class="volume-btn" id="volume-btn" title="Mute/Unmute">
+                    <button class="volume-btn" id="volume-btn" title="mute/unmute">
                         <svg id="vol-up-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
                         <svg id="vol-mute-icon" viewBox="0 0 24 24" style="display:none;"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.21.05-.42.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
                     </button>
@@ -747,6 +737,19 @@ if uploaded_file is not None:
 
         <!-- Plots grid -->
         <div class="plots-grid">
+            <!-- Affordance Field Card -->
+            <div class="plot-card affordance-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="dot green"></span>affordance field A(t, f)
+                    </div>
+                    <span class="card-subtitle">integrated listening features</span>
+                </div>
+                <div class="plot-image-container">
+                    <img id="af-img" class="plot-image" src="" alt="Affordance Field">
+                </div>
+            </div>
+
             <!-- Spectrogram (STFT) Card -->
             <div class="plot-card">
                 <div class="card-header">
@@ -757,19 +760,6 @@ if uploaded_file is not None:
                 </div>
                 <div class="plot-image-container">
                     <img id="spec-img" class="plot-image" src="" alt="STFT Spectrogram">
-                </div>
-            </div>
-
-            <!-- Affordance Field Card -->
-            <div class="plot-card affordance-card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <span class="dot green"></span>affordance field A(t,f)
-                    </div>
-                    <span class="card-subtitle">integrated listening features</span>
-                </div>
-                <div class="plot-image-container">
-                    <img id="af-img" class="plot-image" src="" alt="Affordance Field">
                 </div>
             </div>
         </div>
@@ -986,13 +976,33 @@ if uploaded_file is not None:
                 html_code = HTML_TEMPLATE.replace("CHUNKS_DATA_PLACEHOLDER", chunks_json_str).replace("AUDIO_DATA_URI_PLACEHOLDER", audio_data_uri)
                 
                 # 4. Render HTML component inside Streamlit
-                components.html(html_code, height=1100, scrolling=True)
+                components.html(html_code, height=1200, scrolling=False)
         else:
+            import matplotlib.pyplot as plt
+
             # Select chunk to view
             chunk_idx = st.select_slider("select chunk to visualize", options=range(len(results)), format_func=lambda x: f"chunk {x+1} ({results[x]['offset']:.1f}s)")
             
             res = results[chunk_idx]
-            
+
+            st.subheader("affordance field A(t, f)")
+            fig_af, ax_af = plt.subplots(figsize=(16, 6))
+            im_af = ax_af.imshow(
+                res["field"], 
+                aspect='auto', 
+                origin='lower', 
+                cmap=cmap_option,
+                extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
+            )
+            ax_af.set_ylim([130.8128, 4000])
+            ax_af.set_title(f"spectral affordance field - chunk {chunk_idx+1}")
+            ax_af.set_xlabel("time (s)")
+            ax_af.set_ylabel("freq (Hz)")
+            add_c_reference_ticks(ax_af, (130.8128, 4000))
+            fig_af.colorbar(im_af, ax=ax_af, pad=0.06)
+            st.pyplot(fig_af)
+            plt.close(fig_af)
+
             st.subheader("spectrogram (stft)")
             fig_spec, ax_spec = plt.subplots(figsize=(16, 4.5))
             img = ax_spec.imshow(
@@ -1005,28 +1015,10 @@ if uploaded_file is not None:
             )
             ax_spec.set_ylim([0, 8000])
             ax_spec.set_xlabel("time (s)")
-            ax_spec.set_ylabel("freq (hz)")
-            fig_spec.colorbar(img, ax=ax_spec, format="%+2.f db", pad=0.06)
+            ax_spec.set_ylabel("freq (Hz)")
+            fig_spec.colorbar(img, ax=ax_spec, format="%+2.f dB", pad=0.06)
             st.pyplot(fig_spec)
             plt.close(fig_spec)
-
-            st.subheader(f"affordance field A(t, f)")
-            fig_af, ax_af = plt.subplots(figsize=(16, 6))
-            im_af = ax_af.imshow(
-                res["field"], 
-                aspect='auto', 
-                origin='lower', 
-                cmap=cmap_option,
-                extent=[res["times"][0], res["times"][-1], res["freqs"][0], res["freqs"][-1]]
-            )
-            ax_af.set_ylim([130.8128, 4000])
-            ax_af.set_title(f"spectral affordance field - chunk {chunk_idx+1}")
-            ax_af.set_xlabel("time (s)")
-            ax_af.set_ylabel("freq (hz)")
-            add_c_reference_ticks(ax_af, (130.8128, 4000))
-            fig_af.colorbar(im_af, ax=ax_af, pad=0.06)
-            st.pyplot(fig_af)
-            plt.close(fig_af)
 
             # audio player
             st.subheader(f"audio playback - chunk {chunk_idx+1}")
@@ -1041,11 +1033,10 @@ if uploaded_file is not None:
         st.error(f"error: {str(e)}")
 
 else:
-    st.info("upload audio to begin analysis")
+    st.info("choose an example or upload audio to begin analysis")
     st.markdown("""
     ### listening affordance analysis
     this tool uses chunked processing to analyze audio through:
-    - **stft spectrogram**
-    
     - **affordance field** (multi-feature listening representation)
+    - **stft spectrogram**
     """)

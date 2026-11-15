@@ -4,6 +4,4 @@ librosa>=0.11
 matplotlib>=3.7
 
 streamlit
-tqdm
-pydub
 google-cloud-storage

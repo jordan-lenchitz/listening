@@ -1,0 +1,26 @@
+# Audio files (served from GCS in cloud deployments)
+mp3/
+**/*.mp3
+
+# Git & CI
+.git/
+.gitignore
+.github/
+
+# Python caches & virtual environments
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+env/
+ENV/
+
+# OS & IDE files
+**/.DS_Store
+.vscode/
+.idea/
+*.swp
